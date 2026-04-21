@@ -1,0 +1,232 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import Callout from "@/components/Callout.astro";
+
+const signupCurl = [{
+  lang: "curl",
+  code: `$ curl <span class="tok-u">https://login.quickztna.com/api/auth/signup</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "email": "you@company.com",
+      "password": "Str0ngP@ssw0rd!",
+      "full_name": "Your Name"
+    }'</span>`
+}];
+
+const authKeyCurl = [{
+  lang: "curl",
+  code: `$ curl <span class="tok-u">https://login.quickztna.com/api/key-management</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "action": "create_auth_key",
+      "org_id": "org_...",
+      "reusable": true,
+      "expires_in": 3600,
+      "tags": ["tag:laptop", "tag:prod"]
+    }'</span>`
+}, {
+  lang: "Dashboard",
+  code: `<span class="tok-c"># 1. Go to https://login.quickztna.com/auth and sign in
+# 2. Settings → API Keys → Auth Keys
+# 3. Click "Create Auth Key"
+#    - Reusable: yes
+#    - Ephemeral: no
+#    - Expiry: 1 hour
+#    - Tags: tag:laptop, tag:prod
+# 4. Copy the key — format: tskey-auth-&lt;random&gt;</span>`
+}];
+
+const installSamples = [
+  {
+    lang: "Linux / macOS",
+    code: `$ curl -fsSL <span class="tok-u">https://login.quickztna.com/install.sh</span> \\
+    | ZTNA_AUTH_KEY=<span class="tok-s">tskey-auth-xxx</span> sh`
+  },
+  {
+    lang: "Windows",
+    code: `PS&gt; $env:<span class="tok-p">ZTNA_AUTH_KEY</span>=<span class="tok-s">"tskey-auth-xxx"</span>
+PS&gt; irm <span class="tok-u">https://login.quickztna.com/install.ps1</span> | iex`
+  },
+  {
+    lang: "Ansible",
+    code: `<span class="tok-c">- name: Install QuickZTNA</span>
+  shell: curl -fsSL <span class="tok-u">https://login.quickztna.com/install.sh</span> | ZTNA_AUTH_KEY={{ ztna_key }} sh
+  environment:
+    ZTNA_AUTH_KEY: <span class="tok-s">"{{ ztna_key }}"</span>`
+  },
+  {
+    lang: "cloud-init",
+    code: `<span class="tok-k">#cloud-config</span>
+runcmd:
+  - curl -fsSL <span class="tok-u">https://login.quickztna.com/install.sh</span> | ZTNA_AUTH_KEY=<span class="tok-s">tskey-auth-xxx</span> sh`
+  },
+];
+
+const aclSamples = [{
+  lang: "Dashboard JSON",
+  code: `{
+  <span class="tok-p">"name"</span>: <span class="tok-s">"laptops-to-prod-business-hours"</span>,
+  <span class="tok-p">"src"</span>: <span class="tok-s">"tag:laptop"</span>,
+  <span class="tok-p">"dst"</span>: <span class="tok-s">"tag:prod-server"</span>,
+  <span class="tok-p">"proto"</span>: <span class="tok-s">"tcp"</span>,
+  <span class="tok-p">"ports"</span>: <span class="tok-s">"22,443,5432"</span>,
+  <span class="tok-p">"time_hour"</span>: <span class="tok-s">"09-18"</span>,
+  <span class="tok-p">"day_of_week"</span>: <span class="tok-s">"mon-fri"</span>,
+  <span class="tok-p">"source_country"</span>: <span class="tok-s">"IN"</span>
+}`
+}, {
+  lang: "AI-generated",
+  code: `<span class="tok-c"># Use the AI assistant:</span>
+&gt; Laptops can SSH to prod between 9–6 IST on weekdays from India
+
+<span class="tok-c"># Returns the ACL JSON ready to apply.</span>`
+}, {
+  lang: "Terraform",
+  code: `<span class="tok-k">resource</span> <span class="tok-s">"quickztna_acl_rule"</span> <span class="tok-s">"laptops_prod"</span> {
+  name        = <span class="tok-s">"laptops-to-prod-business-hours"</span>
+  src         = <span class="tok-s">"tag:laptop"</span>
+  dst         = <span class="tok-s">"tag:prod-server"</span>
+  proto       = <span class="tok-s">"tcp"</span>
+  ports       = <span class="tok-s">"22,443,5432"</span>
+  time_hour   = <span class="tok-s">"09-18"</span>
+  day_of_week = <span class="tok-s">"mon-fri"</span>
+  source_country = <span class="tok-s">"IN"</span>
+}`
+}];
+
+const verifyCli = [{
+  lang: "CLI",
+  code: `$ ztna status
+<span class="tok-c">● connected &mdash; quantum-safe</span>
+<span class="tok-c">  tailnet: acme.zt.net</span>
+<span class="tok-c">  ip:      100.64.1.7</span>
+<span class="tok-c">  peers:   99 online · 0 offline</span>
+
+$ ztna peers
+<span class="tok-c">laptop-prod-01   100.64.1.7   self · tag:laptop</span>
+<span class="tok-c">db-primary       100.64.1.12  tag:prod-server · 4.2ms direct</span>
+<span class="tok-c">ci-runner-03     100.64.1.18  tag:ci · 38ms direct</span>
+<span class="tok-c">eu-edge-07       100.64.1.31  tag:edge · via derp-lon</span>
+<span class="tok-c">... 96 more</span>
+
+$ ztna ping db-primary
+<span class="tok-c">PING db-primary.acme.zt.net: 4.2ms / 4.5ms / 4.9ms (direct, PQC)</span>`
+}];
+---
+<DocsLayout
+  title="Quickstart · QuickZTNA Docs"
+  description="Go from empty dashboard to 100 devices connected in under 2 minutes. Auth key, one-line installer, ACLs, SSO — in that order."
+  current="quickstart"
+  prev={{ href: "/", label: "Introduction" }}
+  next={{ href: "/api", label: "API Reference" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Get started · 2 minutes</div>
+  <h1>Quickstart</h1>
+  <p class="lead">
+    Empty dashboard to 100 devices connected in under 2 minutes, if you have an
+    MDM or Ansible inventory ready. This page walks through signup, auth key,
+    the one-line install command, verification, and basic ACL / posture / SSO
+    hardening.
+  </p>
+
+  <Callout type="pqc" title="Post-quantum on every plan">
+    Every WireGuard tunnel — free or paid — uses hybrid
+    <code>X25519 + ML-KEM-768</code> key exchange. You don't need to enable
+    anything. Harvest-now-decrypt-later attacks fail by default.
+  </Callout>
+
+  <h2 id="step-1">1. Sign up</h2>
+  <p>
+    Head to <a href="https://login.quickztna.com/auth" target="_blank" rel="noopener noreferrer">login.quickztna.com/auth</a>
+    and sign up with email + password, GitHub / Google OAuth, or SSO
+    (if your org already has an OIDC / SAML tenant configured).
+  </p>
+  <p>
+    You'll land on an empty dashboard under <code>&lt;your-slug&gt;.zt.net</code>.
+    First account on an org is automatically promoted to owner.
+  </p>
+  <CodeBlock samples={signupCurl} />
+
+  <h2 id="step-2">2. Issue a reusable auth key</h2>
+  <p>
+    An auth key (<code>tskey-auth-&lt;random&gt;</code>) is the credential the
+    <code>ztna</code> agent uses to enrol devices. One reusable key covers a
+    100-device rollout.
+  </p>
+  <CodeBlock samples={authKeyCurl} />
+  <Callout type="warn" title="Auth keys are bearer credentials">
+    Treat them like passwords. Set a short expiry (1 hour for rollouts), and
+    revoke the key from the same page once the rollout completes. Machines
+    enrolled with the key remain authenticated via their <code>node_key</code>.
+  </Callout>
+
+  <h2 id="step-3">3. Install the agent everywhere</h2>
+  <p>
+    Pipe the installer with <code>ZTNA_AUTH_KEY</code> as an environment variable.
+    The installer detects OS/arch, downloads the correct binary from
+    <code>/api/releases/*</code>, installs a system service, runs
+    <code>ztna login --auth-key $ZTNA_AUTH_KEY</code>, and brings the tunnel up.
+  </p>
+  <CodeBlock samples={installSamples} />
+  <p>
+    Parallel rollout completes in about the time it takes for 100 simultaneous
+    downloads. Each device handshakes with the control plane, receives its
+    tailnet IP (<code>100.64.x.x</code>) and MagicDNS name
+    (<code>&lt;host&gt;.&lt;org&gt;.zt.net</code>), and joins the mesh.
+  </p>
+
+  <h2 id="step-4">4. Verify the mesh</h2>
+  <p>
+    Open the dashboard's <strong>Machines</strong> view. You should see 100
+    entries with green heartbeats. From any enrolled device:
+  </p>
+  <CodeBlock samples={verifyCli} />
+
+  <h2 id="step-5">5. Lock it down with ACL + posture</h2>
+  <p>
+    Out of the box, every enrolled device can reach every other device. Before
+    production, write at least one ACL rule. Use the dashboard UI, the AI
+    assistant (natural language), or Terraform.
+  </p>
+  <CodeBlock samples={aclSamples} />
+
+  <p>
+    Add <strong>device posture</strong> requirements under
+    <strong>Device Security → Posture Policies</strong>. Require disk
+    encryption + OS version ≥ 14 before a device can access tagged resources.
+    Non-compliant devices are automatically quarantined and cannot heartbeat
+    until they remediate.
+  </p>
+
+  <h2 id="step-6">6. Configure SSO + MFA</h2>
+  <p>
+    Once auth keys are revoked, users should sign in via SSO (Okta, Azure AD,
+    Google Workspace, Auth0, or any OIDC / SAML IdP).
+    Dashboard → <strong>Admin → SSO</strong>.
+  </p>
+  <p>
+    On paid plans, enable <strong>SCIM 2.0</strong> for automated user
+    lifecycle. Enable <strong>TOTP MFA</strong> from the same page — replay
+    protected with a 90-second used-code cache, 10 backup codes per user.
+  </p>
+
+  <h2 id="troubleshooting">Troubleshooting</h2>
+  <p>If something doesn't work on the first try, check these in order:</p>
+  <ul>
+    <li><strong>Installer hangs</strong> — outbound HTTPS (443) to <code>login.quickztna.com</code> and <code>releases.quickztna.com</code> must be allowed.</li>
+    <li><strong>Device shows offline</strong> — UDP 3478 (STUN) or WSS 443 (DERP) is blocked. Run <code>ztna netcheck</code> on the device to confirm NAT type and DERP reachability.</li>
+    <li><strong>Auth key rejected</strong> — the key is expired or revoked. Issue a new one.</li>
+    <li><strong>Two devices can't reach each other</strong> — check the <strong>ACLs</strong> tab. Default allow is on by default but a tag-scoped rule may be restricting.</li>
+    <li><strong>High latency cross-region</strong> — DERP relay fallback is engaged. Fine for most traffic. Direct P2P requires at least one side with reachable UDP.</li>
+  </ul>
+
+  <h2 id="whats-next">What's next</h2>
+  <ul>
+    <li><a href="/api">API Reference</a> — automate everything via REST</li>
+    <li><a href="/cli">CLI reference</a> — full <code>ztna</code> command surface</li>
+    <li><a href="/features">Features by plan</a> — what unlocks on Business and Workforce</li>
+    <li><a href="/security">Security</a> — PQC details, threat model, audit trail</li>
+  </ul>
+</DocsLayout>

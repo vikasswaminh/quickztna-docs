@@ -1,0 +1,191 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import Callout from "@/components/Callout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Architecture · QuickZTNA Docs"
+  description="How QuickZTNA is built — control plane, data plane, multi-tenant model, storage, agent internals, DERP relays, PQC key exchange flow."
+  current="index"
+  activeHref="/architecture"
+  prev={{ href: "/concepts", label: "Core concepts" }}
+  next={{ href: "/security", label: "Security" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Reference</div>
+  <h1>Architecture</h1>
+  <p class="lead">
+    How the pieces fit together at runtime. Control plane, data plane,
+    storage, agent internals, and the two-server HA topology. Everything
+    here is derived directly from the running code, not aspirational.
+  </p>
+
+  <h2 id="top-down">Top-down view</h2>
+  <CodeBlock samples={[s("diagram", `              login.quickztna.com
+           (Caddy auto-TLS, HTTP/3)
+                      │
+      ┌───────────────┼───────────────┐
+      ▼               ▼               ▼
+ React Vite SPA   Hono/Node API   WebSocket RT
+ (static CDN)     (Docker, :3000) (same process)
+                      │
+      ┌───────────────┼───────────────┐
+      ▼               ▼               ▼
+ PostgreSQL 16    Valkey (Redis)   Cloudflare R2
+ (primary + HA   (cache, pub/sub,  (object storage,
+  replica)        rate limits)     backups, recordings)
+
+ Data plane (peer-to-peer, server-assisted only):
+   STUN (UDP 3478) → NAT discovery
+   DERP (WSS 443)  → relay fallback (4 regions)
+   WireGuard       → direct encrypted tunnels, PQC hybrid`)]} />
+
+  <h2 id="control-plane">Control plane</h2>
+
+  <h3>Frontend — React SPA</h3>
+  <p>Vite + React 18 + TypeScript + shadcn/ui + Tailwind CSS. 70+ pages, code-split per route.</p>
+  <ul>
+    <li><strong>API client</strong> — Supabase-style chainable query builder (<code>api.from("machines").eq(...)</code>)</li>
+    <li><strong>Auth context</strong> — access token in memory, refresh via <code>__Host-</code> cookie</li>
+    <li><strong>Org context</strong> — selected org loaded on auth; every query scoped to <code>org_id</code></li>
+    <li><strong>Realtime</strong> — single WebSocket with per-channel fan-out</li>
+  </ul>
+  <p>Build output is static files served by Caddy from <code>/srv/frontend</code>.</p>
+
+  <h3>Backend — Hono / Node.js 20</h3>
+  <p>One process, many handlers. 75 handler files in <code>backend/src/handlers/</code>, each exports <code>handleX(request, env): Response</code>.</p>
+  <ul>
+    <li><strong>Router</strong> — <code>backend/src/router.ts</code>, 100+ routes with middleware ordering (logging → CORS → CSRF → auth → handler)</li>
+    <li><strong>Envelope</strong> — every response shaped as <code>&#123; success, data, error &#125;</code></li>
+    <li><strong>Database</strong> — <code>pgify</code> layer converts <code>?</code> placeholders to <code>$1/$2</code>. Query patterns: <code>.first()</code>, <code>.all()</code>, <code>.run()</code>, <code>.batch()</code></li>
+    <li><strong>Migrations</strong> — <code>backend/migrations/*.sql</code>, auto-applied on startup (48 migrations to date)</li>
+  </ul>
+
+  <h3>State stores</h3>
+  <ul>
+    <li><strong>PostgreSQL 16</strong> — source of truth. Multi-tenant via <code>org_id</code> foreign keys. Streaming replication to standby.</li>
+    <li><strong>Valkey (Redis-compatible)</strong> — session KV (<code>refresh:&lt;token&gt;</code>, <code>jwt_blacklist:&lt;user&gt;</code>), rate limits, WebSocket pub/sub for cross-server broadcast.</li>
+    <li><strong>Cloudflare R2</strong> — object storage for session recordings, audit exports, PG backups.</li>
+    <li><strong>PgBouncer</strong> connection pool at <code>:6432</code> in front of PG <code>:5432</code>.</li>
+  </ul>
+
+  <h2 id="data-plane">Data plane</h2>
+
+  <h3>WireGuard mesh</h3>
+  <p>
+    Every peer has a static WireGuard key pair. Tunnels are peer-to-peer direct
+    whenever NAT allows. The PQC hybrid key exchange (X25519 + ML-KEM-768,
+    combined via HKDF-SHA256) produces the WireGuard PSK. Routing is kernel on
+    Linux, userspace (<code>wireguard-go</code>) everywhere else.
+  </p>
+
+  <h3>DERP relays</h3>
+  <p>4 global WebSocket-over-TLS regions for peers that can't reach each other directly:</p>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">BLR1</span><span class="param-type">139.59.26.108</span></div><p class="param-desc">India (Bangalore)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">NYC1</span><span class="param-type">142.93.7.116</span></div><p class="param-desc">US East (New York)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">LON1</span><span class="param-type">142.93.39.6</span></div><p class="param-desc">Europe (London)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">SFO3</span><span class="param-type">137.184.190.98</span></div><p class="param-desc">US West (San Francisco)</p></div>
+  </div>
+  <p>DERP is TLS 1.3 minimum with X25519Kyber768 hybrid KEM enabled at the TLS layer. Agents pick the lowest-latency relay via <code>ztna netcheck</code>.</p>
+
+  <h3>STUN</h3>
+  <p>UDP 3478. Used by agents to discover their public endpoint before attempting P2P. STUN servers are embedded in the DERP host fleet.</p>
+
+  <h2 id="agent">Go agent</h2>
+  <p>Four binaries built from the same tree:</p>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">cmd/quickztna/</span></div><p class="param-desc">CLI binary (<code>ztna</code>). 39 commands.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">cmd/quickztna-svc/</span></div><p class="param-desc">Windows Service with workforce monitoring (build tag <code>workforce</code>).</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">cmd/quickztna-desktop/</span></div><p class="param-desc">Wails v2 GUI (Windows systray).</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">cmd/quickztna-gui/</span></div><p class="param-desc">Alternative GUI binary.</p></div>
+  </div>
+  <p>
+    <strong>Go 1.24+ required</strong> — we use stdlib <code>crypto/mlkem</code>.
+    Three variants (<code>client/</code>, <code>client-core/</code>,
+    <code>client-enterprise/</code>) share identical PQC code.
+  </p>
+
+  <h3>Install flow</h3>
+  <ol>
+    <li><code>install.sh</code> / <code>install.ps1</code> detect OS + arch</li>
+    <li>Query <code>/api/client-version</code> with <code>action: "check"</code>, <code>platform: "linux-amd64"</code> → get release URL</li>
+    <li>Download binary from <code>/api/releases/*</code></li>
+    <li>Verify SHA-256 checksum</li>
+    <li>Install as systemd / launchd / Windows service</li>
+    <li>If <code>ZTNA_AUTH_KEY</code> set: run <code>ztna login --auth-key</code> + <code>ztna up</code></li>
+  </ol>
+  <p>The <code>client_versions</code> DB table controls which binary is "latest" — flag a row <code>is_latest = true</code> to publish.</p>
+
+  <h2 id="auth-flows">Authentication flows</h2>
+
+  <h3>Browser login (SPA)</h3>
+  <ol>
+    <li><code>POST /api/auth/login</code> with email + password</li>
+    <li>Response: access_token + refresh_token (body) + <code>Set-Cookie: __Host-refresh_token</code></li>
+    <li>SPA stores access_token in memory only</li>
+    <li>On 401: <code>POST /api/auth/refresh</code> (cookie auto-sent) → new access token</li>
+    <li>On logout: <code>POST /api/auth/logout</code> clears server-side refresh + cookie</li>
+  </ol>
+
+  <h3>Agent registration</h3>
+  <ol>
+    <li><code>POST /api/register-machine</code> with auth key in Authorization header</li>
+    <li>Server validates auth key, generates <code>node_key</code>, allocates tailnet IP</li>
+    <li>Agent stores <code>node_key</code> locally (<code>~/.config/ztna/</code>) and uses it for all future calls</li>
+    <li>Agent heartbeats every 60s via <code>POST /api/machine-heartbeat</code></li>
+  </ol>
+
+  <h3>CLI login (browser-backed)</h3>
+  <ol>
+    <li><code>ztna login</code> starts local HTTP server on random port → opens browser</li>
+    <li>User logs in via SSO / password</li>
+    <li>SPA calls <code>/api/auth</code> with <code>action: cli_complete</code> → one-time code</li>
+    <li>SPA redirects to <code>http://127.0.0.1:PORT?code=...</code></li>
+    <li>Local server exchanges code for JWT pair + saves to disk</li>
+  </ol>
+
+  <h2 id="ha">Two-server HA topology</h2>
+  <Callout type="info" title="Production vs standby">
+    <strong>172.99.189.211</strong> (PROD) runs Caddy, API, PG primary, Valkey primary, and monitoring. <strong>216.106.187.158</strong> (STANDBY) runs a read-only PG replica via streaming replication and a Valkey replica. Deploys always go to PROD; STANDBY is automatic-failover target.
+  </Callout>
+  <p>Docker containers on PROD (10 total):</p>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">quickztna-api-1</span><span class="param-type">Node.js</span></div><p class="param-desc">Production API (:3000, host network)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">quickztna-caddy-1</span><span class="param-type">caddy:2.8</span></div><p class="param-desc">Reverse proxy + TLS (:80/:443)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">postgres16</span><span class="param-type">postgres:16</span></div><p class="param-desc">PostgreSQL PRIMARY (:5432)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">pgbouncer</span><span class="param-type">pgbouncer</span></div><p class="param-desc">Connection pooler (:6432)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">valkey</span><span class="param-type">valkey:7</span></div><p class="param-desc">Valkey PRIMARY (:6379)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">monitoring-*</span><span class="param-type">Prom/Grafana/Loki</span></div><p class="param-desc">Prometheus, Grafana, Loki, Alertmanager, Blackbox exporter (localhost only)</p></div>
+  </div>
+  <p>
+    <strong>Firewall (UFW):</strong> only <code>:80</code> and <code>:443</code>
+    accept external traffic. PostgreSQL and API are not directly reachable.
+  </p>
+  <p>
+    <strong>Backups:</strong> <code>pg_dump</code> at 03:00 UTC daily → local
+    retention 7 days → upload to R2 (<code>s3://quickztna/backups/postgres/</code>).
+    Prometheus alerts if backup is stale &gt;25h or fails.
+  </p>
+
+  <h2 id="layout">Repository layout</h2>
+  <CodeBlock samples={[s("tree", `src/                     # React frontend (Vite + shadcn/ui)
+backend/                 # Node.js API (Hono + PostgreSQL + Valkey)
+ztna/client/             # Go CLI (Go 1.24+, native crypto/mlkem)
+ztna/client-core/        # Go client — core variant
+ztna/client-enterprise/  # Go client — enterprise variant
+ztna/server/             # DERP + STUN Docker stack
+public/install.sh        # Linux/macOS installer
+public/install.ps1       # Windows installer
+docker-compose.yml
+Caddyfile
+vite.config.ts`)]} />
+
+  <h2 id="next">See also</h2>
+  <ul>
+    <li><a href="/security">Security</a> — the crypto side of the data plane in detail</li>
+    <li><a href="/api">API Reference</a> — every endpoint the control plane exposes</li>
+    <li><a href="/cli">CLI Reference</a> — every command the agent supports</li>
+  </ul>
+</DocsLayout>

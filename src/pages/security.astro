@@ -1,0 +1,221 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import Callout from "@/components/Callout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Security · QuickZTNA Docs"
+  description="Cryptographic commitments, threat model, authentication, audit trail, and data handling. The document for your security team."
+  current="index"
+  activeHref="/security"
+  prev={{ href: "/architecture", label: "Architecture" }}
+  next={{ href: "/features", label: "Features" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Reference · For security teams</div>
+  <h1>Security</h1>
+  <p class="lead">
+    QuickZTNA's cryptographic commitments, threat model, authentication flows,
+    and audit guarantees. This is the doc to hand to your security team or
+    auditor — honest about what we defend against and what we don't.
+  </p>
+
+  <h2 id="pqc">Post-quantum cryptography</h2>
+  <Callout type="pqc" title="Hybrid by default, no toggle">
+    Every peer-to-peer tunnel — on every plan — uses X25519 + ML-KEM-768 hybrid key exchange. There is no configuration. Peers without PQC support gracefully fall back to classical-only WireGuard; mixed fleets work fine.
+  </Callout>
+  <p>
+    Each tunnel's PSK is derived from a combination of X25519 ECDH and ML-KEM-768 KEM shared secrets:
+  </p>
+  <CodeBlock samples={[s("Derivation", `// ztna/client/pkg/crypto/pqc.go
+PSK = HKDF-SHA256(
+    secret: X25519_shared || ML-KEM_shared,
+    salt:   nil,
+    info:   "quickztna-pqc-wg-psk-v1",
+    length: 32,
+)`)]} />
+  <p><strong>Implementation files:</strong></p>
+  <ul>
+    <li><code>ztna/client/pkg/crypto/pqc.go</code> — keygen + encap/decap + PSK derivation (Go stdlib <code>crypto/mlkem</code>, no external library)</li>
+    <li><code>ztna/client/pkg/agent/pqc.go</code> — per-peer state cache</li>
+    <li><code>ztna/client/pkg/wireguard/engine.go</code> — PSK injection into WireGuard IPC</li>
+    <li><code>backend/src/handlers/key-exchange.ts</code> — server-side relay</li>
+    <li><code>backend/migrations/043_pqc_key_exchange.sql</code> — 4 nullable columns on <code>key_exchanges</code></li>
+  </ul>
+
+  <h2 id="control-plane">Control plane — TLS + JWT</h2>
+  <ul>
+    <li><strong>TLS:</strong> Caddy auto-TLS via Let's Encrypt. HSTS preload, TLS 1.2+, modern cipher suite only.</li>
+    <li><strong>JWT:</strong> ES256 (ECDSA P-256 + SHA-256). Issuer <code>quickztna</code>, audience <code>quickztna-api</code>. 1-hour access token, 30-day refresh token.</li>
+    <li><strong>Refresh cookie:</strong> <code>__Host-refresh_token</code> — HttpOnly, Secure, SameSite=Strict, Path=/. The <code>__Host-</code> prefix pins the cookie to exact origin with no Domain attribute.</li>
+    <li><strong>WebSocket auth:</strong> token via <code>Sec-WebSocket-Protocol</code> subprotocol header — never in URL. Prevents token leak to proxy logs, CDN caches, browser history.</li>
+    <li><strong>DERP relays:</strong> TLS 1.3 minimum with X25519Kyber768 hybrid KEM enabled at the TLS layer.</li>
+  </ul>
+
+  <h2 id="at-rest">At rest</h2>
+  <ul>
+    <li><strong>PostgreSQL:</strong> disk encryption (Docker volume on encrypted host)</li>
+    <li><strong>Secrets vault:</strong> AES-256-GCM. Per-org DEKs, sealed by master KEK in env</li>
+    <li><strong>R2 object storage:</strong> server-side encryption (Cloudflare-managed keys)</li>
+    <li><strong>Backups:</strong> daily <code>pg_dump</code> to R2, 7-day local retention, encrypted in transit and at rest</li>
+  </ul>
+
+  <h2 id="password-hash">Password hashing</h2>
+  <ul>
+    <li><strong>PBKDF2-SHA256</strong>, 100,000 iterations, 32-byte key, random salt per password</li>
+    <li>Legacy SHA-256 hashes auto-upgraded on successful login</li>
+    <li><strong>Timing-safe verification:</strong> dummy PBKDF2 against a pre-computed hash for non-existent users — login timing is constant (anti-enumeration)</li>
+  </ul>
+
+  <h2 id="mfa">TOTP MFA</h2>
+  <ul>
+    <li>RFC 6238 compliant, 30-second window, ±1 step drift tolerance</li>
+    <li><strong>Replay protection:</strong> used codes cached in KV for 90 seconds</li>
+    <li>Backup codes: 10 one-time codes, SHA-256 hashed at rest</li>
+  </ul>
+
+  <h2 id="authentication">Authentication model</h2>
+  <div class="params-table">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">User (dashboard)</span><span class="param-type">1h / 30d</span></div>
+      <p class="param-desc">Email+password → JWT pair; refresh via <code>__Host-</code> cookie</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">User (SSO)</span><span class="param-type">1h / 30d</span></div>
+      <p class="param-desc">SAML / OIDC → JWT pair. Same tokens as password login.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">User (CLI)</span><span class="param-type">1h / 30d</span></div>
+      <p class="param-desc">Browser OAuth flow → one-time code → JWT pair</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Agent (ztna)</span><span class="param-type">node_key</span></div>
+      <p class="param-desc">Auth key on first boot → permanent <code>node_key</code>. Auth key is revocable.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Service (SCIM, Terraform)</span><span class="param-type">API key</span></div>
+      <p class="param-desc">Long-lived until revoked. Org-scoped.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Superadmin</span><span class="param-type">JWT (hardcoded)</span></div>
+      <p class="param-desc">Platform operator only. Cannot bypass plan gates at backend.</p>
+    </div>
+  </div>
+  <p>
+    <strong>Refresh token binding:</strong> refresh tokens are bound to a device
+    fingerprint (UA + /24 IP prefix). Token theft across devices fails with
+    <code>DEVICE_MISMATCH</code>.
+  </p>
+  <p>
+    <strong>Account lockout:</strong> 10 failed logins per email per 5 min →
+    15-minute lockout. Dummy PBKDF2 ensures lockout response is timing-identical
+    to invalid-credentials response.
+  </p>
+  <p>
+    <strong>Token blacklist:</strong> password change and account deletion set
+    <code>jwt_blacklist:&lt;user_id&gt;</code> in KV (TTL = 30d, matching refresh
+    token). All existing tokens reject immediately.
+  </p>
+
+  <h2 id="csrf">CSRF protection</h2>
+  <p>
+    Origin check on every state-changing request. Only whitelisted origins
+    (<code>login.quickztna.com</code>, dev hosts) accepted. Combined with CORS
+    (only whitelisted origins in <code>Access-Control-Allow-Origin</code>), this
+    is sufficient for a same-origin SPA. <strong>No</strong>
+    <code>X-CSRF-Token</code> cookie — Origin check + HttpOnly cookies is the
+    chosen model.
+  </p>
+
+  <h2 id="rate-limits">Rate limiting</h2>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">/auth/login</span><span class="param-type">per IP · per email</span></div><p class="param-desc">10 / 5 min · 10 / 5 min (separate counters)</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">/auth/signup</span><span class="param-type">per IP</span></div><p class="param-desc">5 / 5 min</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">/auth/reset-password</span><span class="param-type">per IP</span></div><p class="param-desc">5 / 5 min</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">/auth/mfa/*</span><span class="param-type">per user</span></div><p class="param-desc">5 / 5 min</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">/auth/change-password</span><span class="param-type">per user</span></div><p class="param-desc">5 / 5 min</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">WebSocket connections</span><span class="param-type">per org</span></div><p class="param-desc">200 concurrent</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">WebSocket broadcast</span><span class="param-type">per client</span></div><p class="param-desc">10 / min · 4 KB payload max</p></div>
+  </div>
+  <p>
+    <strong>Client IP detection:</strong> <code>cf-connecting-ip</code> →
+    <code>x-real-ip</code> → <code>x-forwarded-for</code>.
+    <code>x-forwarded-for</code> is never trusted first (spoofable).
+  </p>
+
+  <h2 id="secrets">Secrets handling</h2>
+  <ul>
+    <li>Private keys (CAs, signing keys, WireGuard static keys) encrypted with AES-256-GCM before DB insertion. Fail hard if encryption fails — <strong>never</strong> fall back to plaintext</li>
+    <li>Environment: <code>JWT_PRIVATE_KEY</code>, <code>JWT_PUBLIC_KEY</code>, master KEKs live in Docker env vars (not in the image)</li>
+    <li>Rotation: secrets vault items support scheduled rotation via <code>secret-rotation</code> cron</li>
+  </ul>
+
+  <h2 id="audit">Audit trail</h2>
+  <p>Every state change writes to <code>audit_logs</code> with:</p>
+  <ul>
+    <li><code>org_id</code>, <code>user_id</code>, <code>action</code>, <code>resource_type</code>, <code>resource_id</code></li>
+    <li><code>details</code> (JSONB), <code>ip_address</code>, <code>user_agent</code>, <code>created_at</code></li>
+  </ul>
+  <p><strong>Immutable</strong> — no UPDATE, no DELETE paths in application code. 90-day retention via <code>audit-log-retention</code> cron. Exported to Loki for cross-org observability.</p>
+
+  <h2 id="data-handling">Data handling</h2>
+  <ul>
+    <li><strong>Org isolation:</strong> every DB query filters by <code>org_id</code> or fails. Enforced at middleware level; never trusted from client input</li>
+    <li><strong>Cascade deletes:</strong> preserved where orphan rows are safe. <strong>SET NULL</strong> used for audit/compliance tables so records survive user deletion</li>
+    <li><strong>GDPR:</strong> <code>/auth/delete-account</code> cascades user-scoped data; anonymizes audit rows; notifies via email</li>
+    <li><strong>PII in logs:</strong> user-agent, IP, email truncated. Never passwords, keys, or tokens</li>
+    <li><strong>Docker capabilities:</strong> firewall container has only <code>NET_ADMIN</code> + <code>NET_RAW</code>. <code>SYS_ADMIN</code> removed (it was equivalent to root)</li>
+  </ul>
+
+  <h2 id="threat-model">Threat model</h2>
+
+  <h3>What we defend against</h3>
+  <ul>
+    <li><strong>Passive network adversary</strong> — TLS + WireGuard PQC tunnel protects everything in transit</li>
+    <li><strong>Future quantum adversary</strong> — ML-KEM-768 hybrid key exchange; stored traffic cannot be decrypted post-quantum</li>
+    <li><strong>Credential theft</strong> — 1h access token + device-bound refresh + blacklist-on-change + MFA + posture</li>
+    <li><strong>Server-side compromise of one org</strong> — org isolation means one tenant cannot reach another's data</li>
+    <li><strong>Cross-site request forgery</strong> — Origin check + SameSite=Strict cookies</li>
+    <li><strong>XSS token theft</strong> — access token in memory only (never localStorage); refresh token in HttpOnly cookie</li>
+    <li><strong>Bruteforce</strong> — per-IP and per-email rate limits; account lockout; timing-safe password verification</li>
+    <li><strong>Replay attacks</strong> — TOTP replay cache; refresh token single-use (rotates on each refresh)</li>
+    <li><strong>Log injection</strong> — structured logs via pino; user input never concatenated into log lines</li>
+  </ul>
+
+  <h3>What we do NOT defend against</h3>
+  <Callout type="warn" title="Honest limits">
+    These are out of scope for the current build. Important for your threat model.
+  </Callout>
+  <ul>
+    <li><strong>Root-level compromise of the production server</strong> — would expose everything. Mitigation: UFW firewall, non-root container users, secrets in env only</li>
+    <li><strong>Compromise of the CA signing key</strong> — used for issued x509/SSH certs. Mitigation: short-lived certs (≤ 1h), rotation</li>
+    <li><strong>Malicious authorized admin</strong> — an org admin with legitimate credentials can exfiltrate their own org's data. Mitigation: audit logs, session recording</li>
+    <li><strong>Supply-chain attacks on upstream Go/Node deps</strong> — Mitigation: lockfiles, Dependabot, minimal deps</li>
+    <li><strong>Data residency</strong> — data currently lives on servers in the chosen region only. Multi-region replication available on request</li>
+  </ul>
+
+  <h2 id="disclosure">Vulnerability disclosure</h2>
+  <p>
+    Security issues: email <a href="mailto:security@quickztna.com"><code>security@quickztna.com</code></a>.
+    PGP key on <a href="https://login.quickztna.com/.well-known/security.txt">/.well-known/security.txt</a>.
+  </p>
+  <p>We commit to:</p>
+  <ul>
+    <li>Acknowledging receipt within 24 hours</li>
+    <li>Triaging and providing status within 5 business days</li>
+    <li>Coordinated disclosure on a timeline appropriate to severity</li>
+    <li>Public credit in release notes (opt-out available)</li>
+  </ul>
+  <p><strong>Out-of-scope:</strong> rate limit abuse that doesn't exfiltrate data, missing best-practice headers on non-sensitive endpoints, self-XSS.</p>
+
+  <h2 id="compliance">Compliance</h2>
+  <p>Policies and readiness documents available on request to <a href="mailto:sales@quickztna.com">sales@quickztna.com</a>:</p>
+  <ul>
+    <li>SOC 2 readiness</li>
+    <li>Audit log policy (90-day retention, immutable, exportable)</li>
+    <li>Business continuity (daily backups, 25h staleness alerting, streaming replication)</li>
+    <li>Data handling policy (classification + retention)</li>
+    <li>Information security policy</li>
+  </ul>
+</DocsLayout>

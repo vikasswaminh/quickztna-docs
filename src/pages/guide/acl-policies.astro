@@ -1,0 +1,189 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import Callout from "@/components/Callout.astro";
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Guide · Writing ACL policies · QuickZTNA"
+  description="Write, test, version, and roll back ACL rules. ABAC on user, tag, posture, time, country, protocol, port. AI-generated policies. JIT overrides."
+  current="index"
+  activeHref="/guide/acl-policies"
+  prev={{ href: "/guide/approve-devices", label: "Approving devices" }}
+  next={{ href: "/guide/posture", label: "Device posture" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>User guide</div>
+  <h1>Writing ACL policies</h1>
+  <p class="lead">
+    QuickZTNA ACLs are attribute-based — rules match on user, tag, device
+    posture, time, country, protocol, and port. This guide walks through
+    writing rules, testing them before rollout, versioning, and AI-generated
+    policies.
+  </p>
+
+  <h2 id="model">The ACL model</h2>
+  <p>A rule has <strong>src</strong> (who's allowed), <strong>dst</strong> (what they can reach), and optional <strong>conditions</strong>. A connection is allowed iff at least one rule matches.</p>
+  <CodeBlock samples={[s("Minimal allow rule", `{
+  <span class="tok-p">"name"</span>: <span class="tok-s">"engineers-to-prod-db"</span>,
+  <span class="tok-p">"src"</span>:  <span class="tok-s">"tag:engineer"</span>,
+  <span class="tok-p">"dst"</span>:  <span class="tok-s">"tag:prod-db"</span>,
+  <span class="tok-p">"proto"</span>: <span class="tok-s">"tcp"</span>,
+  <span class="tok-p">"ports"</span>: <span class="tok-s">"5432"</span>
+}`)]} />
+
+  <h2 id="matchers">Matcher syntax</h2>
+  <p>Both <code>src</code> and <code>dst</code> accept:</p>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">tag:&lt;name&gt;</span></div><p class="param-desc">Any machine with this tag. Preferred — scales as fleet grows.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">user:&lt;email&gt;</span></div><p class="param-desc">Specific user. E.g. <code>user:alice@acme.com</code>.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">group:&lt;idp-group&gt;</span></div><p class="param-desc">IdP group name (case-insensitive). Resolved from OIDC claims or SCIM sync.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">&lt;tailnet-ip&gt;</span></div><p class="param-desc">Specific machine by tailnet IP. Fragile — prefer tags.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">&lt;CIDR&gt;</span></div><p class="param-desc">Subnet range. Use for advertised subnet routes.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">*</span></div><p class="param-desc">Any — use sparingly, only for well-scoped admin rules.</p></div>
+  </div>
+
+  <h2 id="conditions">Conditions</h2>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">proto</span><span class="param-type">tcp / udp / icmp / *</span></div><p class="param-desc">Transport protocol. Default <code>*</code>.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">ports</span><span class="param-type">string</span></div><p class="param-desc">Comma-separated list or ranges: <code>"22,443,5000-5010"</code>. Default <code>*</code>.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">time_hour</span><span class="param-type">"HH-HH"</span></div><p class="param-desc">UTC hour range: <code>"09-18"</code>. Applies at connection evaluation time.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">day_of_week</span><span class="param-type">"mon-fri"</span></div><p class="param-desc">Day range or specific list: <code>"mon,wed,fri"</code>.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">source_country</span><span class="param-type">ISO-3166-1</span></div><p class="param-desc">GeoIP-resolved country: <code>"IN"</code>, <code>"US"</code>, or list <code>"IN,US,GB"</code>.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">source_os</span><span class="param-type">linux / darwin / windows</span></div><p class="param-desc">Match by source machine OS.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">require_posture</span><span class="param-type">bool</span></div><p class="param-desc">Source machine must be in <code>compliant</code> posture state.</p></div>
+  </div>
+
+  <h2 id="examples">Examples</h2>
+
+  <h3>Engineers SSH to prod (business hours, India only)</h3>
+  <CodeBlock samples={[s("JSON", `{
+  <span class="tok-p">"name"</span>: <span class="tok-s">"eng-ssh-prod-business-hours"</span>,
+  <span class="tok-p">"src"</span>: <span class="tok-s">"tag:engineer"</span>,
+  <span class="tok-p">"dst"</span>: <span class="tok-s">"tag:prod"</span>,
+  <span class="tok-p">"proto"</span>: <span class="tok-s">"tcp"</span>,
+  <span class="tok-p">"ports"</span>: <span class="tok-s">"22"</span>,
+  <span class="tok-p">"time_hour"</span>: <span class="tok-s">"09-18"</span>,
+  <span class="tok-p">"day_of_week"</span>: <span class="tok-s">"mon-fri"</span>,
+  <span class="tok-p">"source_country"</span>: <span class="tok-s">"IN"</span>,
+  <span class="tok-p">"require_posture"</span>: <span class="tok-k">true</span>
+}`)]} />
+
+  <h3>DB admins to Postgres on multiple ports</h3>
+  <CodeBlock samples={[s("JSON", `{
+  <span class="tok-p">"name"</span>: <span class="tok-s">"dba-full-db-access"</span>,
+  <span class="tok-p">"src"</span>: <span class="tok-s">"group:dba"</span>,
+  <span class="tok-p">"dst"</span>: <span class="tok-s">"tag:prod-db"</span>,
+  <span class="tok-p">"proto"</span>: <span class="tok-s">"tcp"</span>,
+  <span class="tok-p">"ports"</span>: <span class="tok-s">"5432,5433,6432,9990-9999"</span>
+}`)]} />
+
+  <h3>CI runners to any test machine (no production)</h3>
+  <CodeBlock samples={[s("JSON", `{
+  <span class="tok-p">"name"</span>: <span class="tok-s">"ci-to-test"</span>,
+  <span class="tok-p">"src"</span>: <span class="tok-s">"tag:ci"</span>,
+  <span class="tok-p">"dst"</span>: <span class="tok-s">"tag:test"</span>,
+  <span class="tok-p">"proto"</span>: <span class="tok-s">"*"</span>,
+  <span class="tok-p">"ports"</span>: <span class="tok-s">"*"</span>
+}`)]} />
+
+  <h2 id="ai">AI-generated rules (natural language)</h2>
+  <p>Type in English — get ACL JSON. Available free on all plans via <code>/api/ai-assist</code> action <code>generate_acl</code>.</p>
+  <CodeBlock samples={[s("Request", `$ curl <span class="tok-u">https://login.quickztna.com/api/ai-assist</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "action": "generate_acl",
+      "org_id": "org_9fX2kR",
+      "description": "Finance team can access the accounting server during work hours from the office IP range"
+    }'</span>`), s("Response", `{
+  <span class="tok-p">"rule"</span>: {
+    <span class="tok-p">"name"</span>: <span class="tok-s">"finance-accounting-office-hours"</span>,
+    <span class="tok-p">"src"</span>: <span class="tok-s">"group:finance"</span>,
+    <span class="tok-p">"dst"</span>: <span class="tok-s">"tag:accounting"</span>,
+    <span class="tok-p">"proto"</span>: <span class="tok-s">"tcp"</span>,
+    <span class="tok-p">"ports"</span>: <span class="tok-s">"443"</span>,
+    <span class="tok-p">"time_hour"</span>: <span class="tok-s">"09-18"</span>,
+    <span class="tok-p">"day_of_week"</span>: <span class="tok-s">"mon-fri"</span>,
+    <span class="tok-p">"source_country"</span>: <span class="tok-s">"US"</span>
+  }
+}`)]} />
+  <p>Review the generated rule, adjust if needed, and apply.</p>
+
+  <h2 id="test">Test before rolling out</h2>
+  <Callout type="info" title="Simulate, don't guess">
+    Always test a new rule against a real src/dst/port combination before saving it. The <code>/api/acl-evaluate</code> endpoint (<code>ztna acl test</code>) is free and instant.
+  </Callout>
+  <CodeBlock samples={[s("CLI", `$ ztna acl test --src laptop-alex --dst db-primary --port 5432 --proto tcp
+<span class="tok-c">✓ ALLOW
+
+Matched rule: acl_7K9xq (eng-ssh-prod-business-hours)
+  src:            tag:laptop matches tag:engineer ✓
+  dst:            tag:prod matches ✓
+  port 5432:      in "5432" ✓
+  time:           14:23 UTC (Thursday) ✓
+  source_country: IN ✓</span>`), s("Denial", `$ ztna acl test --src laptop-alex --dst db-primary --port 3306
+<span class="tok-c">✗ DENY
+  No rule allows laptop-alex → db-primary on port 3306.
+  Closest match: acl_7K9xq (allows port 5432 only).</span>`)]} />
+
+  <h2 id="apply">Apply a rule</h2>
+  <CodeBlock samples={[
+    s("Dashboard", `ACLs → New rule → paste JSON → "Test" → "Save".`),
+    s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/db/acl_rules</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "rows": [{ <span class="tok-c">/* rule JSON */</span> }],
+      "org_id": "org_9fX2kR"
+    }'</span>`),
+    s("Terraform", `<span class="tok-k">resource</span> <span class="tok-s">"quickztna_acl_rule"</span> <span class="tok-s">"eng_ssh_prod"</span> {
+  org_id         = <span class="tok-s">"org_9fX2kR"</span>
+  name           = <span class="tok-s">"eng-ssh-prod-business-hours"</span>
+  src            = <span class="tok-s">"tag:engineer"</span>
+  dst            = <span class="tok-s">"tag:prod"</span>
+  proto          = <span class="tok-s">"tcp"</span>
+  ports          = <span class="tok-s">"22"</span>
+  time_hour      = <span class="tok-s">"09-18"</span>
+  day_of_week    = <span class="tok-s">"mon-fri"</span>
+  source_country = <span class="tok-s">"IN"</span>
+}`),
+  ]} />
+
+  <h2 id="versioning">Versioning + rollback</h2>
+  <p>Every change to the ACL set creates a new version via <code>/api/governance</code> action <code>policy_version_create</code>. Roll back at any time with <code>policy_version_rollback</code>.</p>
+  <CodeBlock samples={[s("Roll back", `$ curl <span class="tok-u">https://login.quickztna.com/api/governance</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "policy_version_rollback",
+      "org_id": "org_9fX2kR",
+      "target_version": 42
+    }'</span>`)]} />
+
+  <h2 id="jit">JIT overrides</h2>
+  <p>If a user needs time-bounded access outside normal ACL rules, they request JIT. Approver grants → temporary ACL rule is injected → auto-expires at the end of the window. See <a href="/api#jit-request">API: jit_request</a>.</p>
+
+  <h2 id="pitfalls">Common pitfalls</h2>
+  <div class="params-table">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Default-allow vs default-deny</span></div>
+      <p class="param-desc">By default, no rules = no restrictions (full mesh connectivity). Set org setting <code>default_deny</code> to flip — then you must write explicit allow rules for everything.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Tag typos</span></div>
+      <p class="param-desc">ACL engine doesn't warn if you reference <code>tag:prood</code> (typo). Rule just never matches. Use <code>ztna acl test</code> to verify.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Time zone confusion</span></div>
+      <p class="param-desc"><code>time_hour</code> is UTC. "9-5 IST business hours" is <code>03-12</code> UTC. Use AI-generated rules — it handles the conversion.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Posture condition</span></div>
+      <p class="param-desc"><code>require_posture: true</code> means the SOURCE must be compliant. A non-compliant laptop can still be a destination, unless you add the condition to another rule.</p>
+    </div>
+  </div>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/guide/posture">Posture policies</a> — what makes a machine "compliant"</li>
+    <li><a href="/api#acl-evaluate">API: acl-evaluate</a> — the evaluator behind <code>ztna acl test</code></li>
+    <li><a href="/cli#acl-test">CLI: ztna acl test</a> — CLI wrapper</li>
+  </ul>
+</DocsLayout>

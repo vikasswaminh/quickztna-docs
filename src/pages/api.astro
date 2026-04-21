@@ -1,0 +1,1064 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import ResponseBlock from "@/components/ResponseBlock.astro";
+import ParamRow from "@/components/ParamRow.astro";
+import Callout from "@/components/Callout.astro";
+
+// Flagship endpoint = create_auth_key (the action that enables the 2-min 100-device deploy)
+const createAuthKeyRequest = [
+  {
+    lang: "curl",
+    code: `$ curl <span class="tok-u">https://login.quickztna.com/api/key-management</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "action": "create_auth_key",
+      "org_id": "org_9fX2kRmBnqT4",
+      "reusable": true,
+      "ephemeral": false,
+      "expires_in": 3600,
+      "tags": ["tag:laptop", "tag:prod"]
+    }'</span>`,
+  },
+  {
+    lang: "Node.js",
+    code: `<span class="tok-k">import</span> { QuickZTNA } <span class="tok-k">from</span> <span class="tok-s">'@quickztna/node'</span>;
+
+<span class="tok-k">const</span> qz = <span class="tok-k">new</span> <span class="tok-f">QuickZTNA</span>(process.env.<span class="tok-p">QZ_API_KEY</span>);
+
+<span class="tok-k">const</span> key = <span class="tok-k">await</span> qz.keys.<span class="tok-f">createAuthKey</span>({
+  orgId: <span class="tok-s">'org_9fX2kRmBnqT4'</span>,
+  reusable: <span class="tok-k">true</span>,
+  ephemeral: <span class="tok-k">false</span>,
+  expiresIn: <span class="tok-n">3600</span>,
+  tags: [<span class="tok-s">'tag:laptop'</span>, <span class="tok-s">'tag:prod'</span>],
+});
+
+<span class="tok-c">// key.key = "tskey-auth-abc123..."</span>`,
+  },
+  {
+    lang: "Python",
+    code: `<span class="tok-k">from</span> quickztna <span class="tok-k">import</span> QuickZTNA
+<span class="tok-k">import</span> os
+
+qz = <span class="tok-f">QuickZTNA</span>(api_key=os.environ[<span class="tok-s">"QZ_API_KEY"</span>])
+
+key = qz.keys.<span class="tok-f">create_auth_key</span>(
+    org_id=<span class="tok-s">"org_9fX2kRmBnqT4"</span>,
+    reusable=<span class="tok-k">True</span>,
+    ephemeral=<span class="tok-k">False</span>,
+    expires_in=<span class="tok-n">3600</span>,
+    tags=[<span class="tok-s">"tag:laptop"</span>, <span class="tok-s">"tag:prod"</span>],
+)
+<span class="tok-c"># key.key -> "tskey-auth-abc123..."</span>`,
+  },
+  {
+    lang: "Go",
+    code: `<span class="tok-k">package</span> main
+
+<span class="tok-k">import</span> <span class="tok-s">"github.com/quickztna/quickztna-go"</span>
+
+qz := quickztna.<span class="tok-f">NewClient</span>(os.<span class="tok-f">Getenv</span>(<span class="tok-s">"QZ_API_KEY"</span>))
+
+key, err := qz.Keys.<span class="tok-f">CreateAuthKey</span>(ctx, &amp;quickztna.AuthKeyParams{
+    OrgID:     <span class="tok-s">"org_9fX2kRmBnqT4"</span>,
+    Reusable:  <span class="tok-k">true</span>,
+    Ephemeral: <span class="tok-k">false</span>,
+    ExpiresIn: <span class="tok-n">3600</span>,
+    Tags:      []<span class="tok-k">string</span>{<span class="tok-s">"tag:laptop"</span>, <span class="tok-s">"tag:prod"</span>},
+})`,
+  },
+  {
+    lang: "CLI",
+    code: `$ ztna auth-key create \\
+    --reusable \\
+    --expiry <span class="tok-s">1h</span> \\
+    --tags <span class="tok-s">tag:laptop,tag:prod</span>
+
+<span class="tok-c"># Output: tskey-auth-abc123...</span>`,
+  },
+  {
+    lang: "Terraform",
+    code: `<span class="tok-k">resource</span> <span class="tok-s">"quickztna_auth_key"</span> <span class="tok-s">"fleet_rollout"</span> {
+  org_id     = <span class="tok-s">"org_9fX2kRmBnqT4"</span>
+  reusable   = <span class="tok-k">true</span>
+  ephemeral  = <span class="tok-k">false</span>
+  expires_in = <span class="tok-n">3600</span>
+  tags = [<span class="tok-s">"tag:laptop"</span>, <span class="tok-s">"tag:prod"</span>]
+}`,
+  },
+];
+
+const responses200 = `{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"id"</span>: <span class="tok-s">"ak_9fX2kRmBnqT4"</span>,
+    <span class="tok-p">"key"</span>: <span class="tok-s">"tskey-auth-abc123def456..."</span>,
+    <span class="tok-p">"org_id"</span>: <span class="tok-s">"org_9fX2kRmBnqT4"</span>,
+    <span class="tok-p">"reusable"</span>: <span class="tok-k">true</span>,
+    <span class="tok-p">"ephemeral"</span>: <span class="tok-k">false</span>,
+    <span class="tok-p">"expires_at"</span>: <span class="tok-s">"2026-04-19T18:00:00Z"</span>,
+    <span class="tok-p">"tags"</span>: [<span class="tok-s">"tag:laptop"</span>, <span class="tok-s">"tag:prod"</span>],
+    <span class="tok-p">"created_by"</span>: <span class="tok-s">"user_5k4aLw3Jm"</span>,
+    <span class="tok-p">"created_at"</span>: <span class="tok-s">"2026-04-19T17:00:00Z"</span>,
+    <span class="tok-p">"revoked"</span>: <span class="tok-k">false</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`;
+
+const responses400 = `{
+  <span class="tok-p">"success"</span>: <span class="tok-k">false</span>,
+  <span class="tok-p">"data"</span>: <span class="tok-k">null</span>,
+  <span class="tok-p">"error"</span>: {
+    <span class="tok-p">"code"</span>: <span class="tok-s">"VALIDATION_ERROR"</span>,
+    <span class="tok-p">"message"</span>: <span class="tok-s">"expires_in must be between 300 and 2592000 seconds"</span>
+  }
+}`;
+
+const responses401 = `{
+  <span class="tok-p">"success"</span>: <span class="tok-k">false</span>,
+  <span class="tok-p">"data"</span>: <span class="tok-k">null</span>,
+  <span class="tok-p">"error"</span>: {
+    <span class="tok-p">"code"</span>: <span class="tok-s">"UNAUTHORIZED"</span>,
+    <span class="tok-p">"message"</span>: <span class="tok-s">"Invalid or missing bearer token"</span>
+  }
+}`;
+
+const responses403 = `{
+  <span class="tok-p">"success"</span>: <span class="tok-k">false</span>,
+  <span class="tok-p">"data"</span>: <span class="tok-k">null</span>,
+  <span class="tok-p">"error"</span>: {
+    <span class="tok-p">"code"</span>: <span class="tok-s">"FORBIDDEN"</span>,
+    <span class="tok-p">"message"</span>: <span class="tok-s">"Only admins can create auth keys"</span>
+  }
+}`;
+
+const responses429 = `{
+  <span class="tok-p">"success"</span>: <span class="tok-k">false</span>,
+  <span class="tok-p">"data"</span>: <span class="tok-k">null</span>,
+  <span class="tok-p">"error"</span>: {
+    <span class="tok-p">"code"</span>: <span class="tok-s">"RATE_LIMITED"</span>,
+    <span class="tok-p">"message"</span>: <span class="tok-s">"Too many requests. Retry after 3s."</span>
+  }
+}`;
+
+const TOC = [
+  { id: "overview", label: "Overview" },
+  { id: "authentication", label: "Authentication" },
+  { id: "envelope", label: "Response envelope" },
+  { id: "create-auth-key", label: "Create auth key", indent: false },
+  { id: "parameters", label: "Body parameters", indent: true },
+  { id: "returns", label: "Returns", indent: true },
+  { id: "errors", label: "Errors" },
+  { id: "pagination", label: "Pagination" },
+  { id: "rate-limits", label: "Rate limits" },
+  { id: "realtime", label: "WebSocket realtime" },
+  { id: "deprecated", label: "Deprecated fields" },
+];
+---
+<DocsLayout
+  title="API Reference · QuickZTNA Docs"
+  description="Complete REST API reference. 57 routes, action-based dispatch, JWT auth, post-quantum-signed sessions. Curl, Node, Python, Go, CLI, Terraform examples."
+  current="api"
+  sidebarVariant="api"
+  threeCol={true}
+  prev={{ href: "/quickstart", label: "Quickstart" }}
+  next={{ href: "/cli", label: "CLI reference" }}
+>
+  <!-- ============ LEFT: CONTENT ============ -->
+  <div id="overview">
+    <div class="eyebrow"><span class="eyebrow-dot"></span>API Reference · v1</div>
+    <h1>QuickZTNA API</h1>
+    <p class="lead">
+      The QuickZTNA API is organized around REST. It uses action-based dispatch
+      inside a single-handler pattern, returns JSON-encoded responses wrapped in a
+      consistent envelope, and takes JWT bearer tokens or org-scoped API keys.
+      57 public endpoints across 10 logical groups.
+    </p>
+
+    <div class="definition">
+      <span class="endpoint-method method-post">POST</span>
+      <span>https://login.quickztna.com/api/key-management</span>
+    </div>
+
+    <p>
+      Creates a new <a href="#create-auth-key">auth key</a> — the credential
+      used by the <code>ztna</code> agent installer to enrol a device. Reusable
+      keys cover fleet rollouts (100 devices in 2 minutes via MDM or Ansible);
+      ephemeral keys are ideal for CI/CD runners that disappear when idle.
+    </p>
+  </div>
+
+  <!-- ============ AUTH ============ -->
+  <div class="api-section">
+    <h2 id="authentication">Authentication</h2>
+    <p>
+      Every authenticated request carries a bearer token in the
+      <code>Authorization</code> header. QuickZTNA supports three credential types:
+    </p>
+    <ul>
+      <li><strong>JWT access token</strong> — ES256-signed, 1-hour TTL. Issued by <code>/api/auth/login</code> and rotated via <code>/api/auth/refresh</code>. Used by the dashboard SPA.</li>
+      <li><strong>API key</strong> — long-lived, revocable, org-scoped. Used by SCIM, Terraform, and your own automation. Created via <code>action: "create_api_key"</code>.</li>
+      <li><strong>Node key</strong> — machine-to-server credential issued at first registration. Used only by the <code>ztna</code> agent for heartbeat and key exchange.</li>
+    </ul>
+
+    <Callout type="warn" title="Keep your keys safe">
+      API keys carry tenant-wide privileges. Never expose them in client-side
+      code, mobile apps, or public repos. Use <code>rotate_api_key</code> on a
+      90-day rotation schedule.
+    </Callout>
+  </div>
+
+  <!-- ============ ENVELOPE ============ -->
+  <div class="api-section">
+    <h2 id="envelope">Response envelope</h2>
+    <p>
+      Every response is wrapped in a consistent envelope. Application-level
+      success is in <code>success</code>, payload in <code>data</code>, and
+      failures populate <code>error</code> with a machine-readable code and a
+      human-readable message.
+    </p>
+    <CodeBlock samples={[{
+      lang: "Success",
+      code: `{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: { <span class="tok-c">/* payload */</span> },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`
+    }, {
+      lang: "Error",
+      code: `{
+  <span class="tok-p">"success"</span>: <span class="tok-k">false</span>,
+  <span class="tok-p">"data"</span>: <span class="tok-k">null</span>,
+  <span class="tok-p">"error"</span>: {
+    <span class="tok-p">"code"</span>: <span class="tok-s">"ERROR_CODE"</span>,
+    <span class="tok-p">"message"</span>: <span class="tok-s">"Human-readable"</span>
+  }
+}`
+    }]} />
+  </div>
+
+  <!-- ============ CREATE AUTH KEY ============ -->
+  <div class="api-section">
+    <h2 id="create-auth-key">Create an auth key</h2>
+    <p>
+      Creates an auth key that the <code>ztna</code> agent uses to enrol devices
+      into your tailnet. The key appears in the
+      <code>ZTNA_AUTH_KEY</code> environment variable read by the installer.
+    </p>
+
+    <div class="definition">
+      <span class="endpoint-method method-post">POST</span>
+      <span>/api/key-management</span>
+      <span style="color:var(--text-muted)">·</span>
+      <span style="color:var(--text-muted)">action: "create_auth_key"</span>
+    </div>
+
+    <h3 id="parameters">Body parameters</h3>
+    <div class="params-table">
+      <ParamRow name="action" type="string" required={true} desc='Must be <code>"create_auth_key"</code>. Do not use the generic <code>"create"</code> — that form does not exist and will 404.' />
+      <ParamRow name="org_id" type="string" required={true} desc="The organization ID this key belongs to. You must be an admin or owner of this org." />
+      <ParamRow name="reusable" type="boolean" desc="If <code>true</code>, the key can enrol multiple machines. Required for fleet rollouts. Default <code>false</code> (one-shot key)." />
+      <ParamRow name="ephemeral" type="boolean" desc="If <code>true</code>, enrolled machines auto-deregister when they go offline. Useful for CI runners and containers. Default <code>false</code>." />
+      <ParamRow name="expires_in" type="integer" desc="Seconds until the key becomes invalid. Minimum <code>300</code>, maximum <code>2592000</code> (30 days). Default <code>3600</code> (1 hour)." />
+      <ParamRow name="tags" type="array of strings" desc='Tags applied to machines enrolled with this key. Prefix with <code>tag:</code> — e.g. <code>["tag:laptop", "tag:prod"]</code>. Used in ACL rules.' />
+      <ParamRow name="description" type="string" desc="Optional human-readable note for audit. Max 255 chars." />
+    </div>
+
+    <h3 id="returns">Returns</h3>
+    <p>
+      Returns an <code>auth_key</code> object on success. The <code>key</code>
+      field is only returned on creation — you cannot retrieve it again later.
+    </p>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <h2 id="auth-endpoints" style="margin-top:64px;">Authentication endpoints</h2>
+
+  <h3 id="auth-signup">POST /api/auth/signup</h3>
+  <p>Create a new user account. Returns JWT pair + refresh cookie on success. Rate-limited to 5 per IP per 5 min.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/auth/signup</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "email": "you@company.com",
+      "password": "Str0ngP@ssw0rd!",
+      "full_name": "Your Name"
+    }'</span>` }]} />
+  <ResponseBlock status="201 Created" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"user_id"</span>: <span class="tok-s">"user_5k4aLw3Jm"</span>,
+    <span class="tok-p">"email"</span>: <span class="tok-s">"you@company.com"</span>,
+    <span class="tok-p">"email_verified"</span>: <span class="tok-k">false</span>,
+    <span class="tok-p">"token"</span>: <span class="tok-s">"eyJhbGciOiJFUzI1NiIs..."</span>,
+    <span class="tok-p">"refresh_token"</span>: <span class="tok-s">"rt_7K9xqP4BmT..."</span>,
+    <span class="tok-p">"expires_in"</span>: <span class="tok-n">3600</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}
+
+<span class="tok-c">// Set-Cookie: __Host-refresh_token=rt_...; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=2592000</span>`} latency="412ms" />
+  <Callout type="info" title="Anti-enumeration">
+    If the email is already registered, signup returns 201 with a placeholder UUID — not a 409 conflict. This prevents attackers from enumerating registered emails.
+  </Callout>
+
+  <h3 id="auth-login">POST /api/auth/login</h3>
+  <p>Exchange email + password for JWT pair. TOTP required if MFA is enabled (returns 403 <code>MFA_REQUIRED</code> if code missing). Rate-limited 10 per IP and 10 per email per 5 min.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/auth/login</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "email": "you@company.com",
+      "password": "Str0ngP@ssw0rd!",
+      "totp_code": "487392"
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"user_id"</span>: <span class="tok-s">"user_5k4aLw3Jm"</span>,
+    <span class="tok-p">"email"</span>: <span class="tok-s">"you@company.com"</span>,
+    <span class="tok-p">"token"</span>: <span class="tok-s">"eyJhbGciOiJFUzI1NiIs..."</span>,
+    <span class="tok-p">"refresh_token"</span>: <span class="tok-s">"rt_7K9xqP4BmT..."</span>,
+    <span class="tok-p">"expires_in"</span>: <span class="tok-n">3600</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="186ms" />
+
+  <h3 id="auth-refresh">POST /api/auth/refresh</h3>
+  <p>Rotate the access token. Browsers send <code>__Host-refresh_token</code> cookie automatically; CLI sends <code>refresh_token</code> in body. Server deletes old refresh token and issues a new pair (single-use rotation).</p>
+  <CodeBlock samples={[{ lang: "curl (cookie)", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/auth/refresh</span> \\
+    -X POST \\
+    -b <span class="tok-s">"__Host-refresh_token=rt_..."</span> \\
+    -d <span class="tok-s">'{}'</span>
+
+<span class="tok-c"># CLI / non-browser: POST /api/auth/refresh with {"refresh_token":"rt_..."}</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"token"</span>: <span class="tok-s">"eyJhbGciOiJFUzI1NiIs..."</span>,
+    <span class="tok-p">"refresh_token"</span>: <span class="tok-s">"rt_8Ly4rN2xQ..."</span>,
+    <span class="tok-p">"expires_in"</span>: <span class="tok-n">3600</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="42ms" />
+
+  <h3 id="auth-me">GET /api/auth/me</h3>
+  <p>Return the authenticated user's profile. Checks JWT, checks blacklist (returns 401 if password was changed).</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/auth/me</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"id"</span>: <span class="tok-s">"user_5k4aLw3Jm"</span>,
+    <span class="tok-p">"email"</span>: <span class="tok-s">"you@company.com"</span>,
+    <span class="tok-p">"full_name"</span>: <span class="tok-s">"Your Name"</span>,
+    <span class="tok-p">"avatar_url"</span>: <span class="tok-k">null</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="18ms" />
+
+  <h3 id="auth-mfa-setup">POST /api/auth/mfa/setup</h3>
+  <p>Generate a new TOTP secret. Scan the returned URI with an authenticator, then call <code>/api/auth/mfa/verify</code> with the first 6-digit code to activate + receive 10 backup codes.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/auth/mfa/setup</span> \\
+    -X POST \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"secret"</span>: <span class="tok-s">"JBSWY3DPEHPK3PXP"</span>,
+    <span class="tok-p">"uri"</span>: <span class="tok-s">"otpauth://totp/QuickZTNA:you@company.com?secret=JBSWY3DPEHPK3PXP&issuer=QuickZTNA"</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="24ms" />
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <h2 id="keys-endpoints" style="margin-top:64px;">API keys</h2>
+
+  <h3 id="create-api-key">POST /api/key-management (action: "create_api_key")</h3>
+  <p>Create a long-lived, revocable API key for machine-to-machine use (SCIM, Terraform, CI/CD). Admin-only.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/key-management</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "action": "create_api_key",
+      "org_id": "org_9fX2kRmBnqT4",
+      "name": "terraform-ci",
+      "scopes": ["machines:write", "acl:write", "dns:write"]
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"id"</span>: <span class="tok-s">"ak_Pq7r2wXK"</span>,
+    <span class="tok-p">"key"</span>: <span class="tok-s">"qz-api-live-4N8mR3w..."</span>,
+    <span class="tok-p">"name"</span>: <span class="tok-s">"terraform-ci"</span>,
+    <span class="tok-p">"scopes"</span>: [<span class="tok-s">"machines:write"</span>, <span class="tok-s">"acl:write"</span>, <span class="tok-s">"dns:write"</span>],
+    <span class="tok-p">"created_at"</span>: <span class="tok-s">"2026-04-19T18:00:00Z"</span>,
+    <span class="tok-p">"revoked"</span>: <span class="tok-k">false</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="38ms" />
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <h2 id="machines-endpoints" style="margin-top:64px;">Machines</h2>
+
+  <h3 id="register-machine">POST /api/register-machine</h3>
+  <p>Agent-side registration. Called by the <code>ztna</code> installer with an auth key. Server generates <code>node_key</code>, allocates tailnet IP, returns machine ID.</p>
+  <Callout type="warn" title="Field name gotcha">
+    Use <code>name</code> (not <code>hostname</code>). The backend silently ignores <code>hostname</code>.
+  </Callout>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/register-machine</span> \\
+    -H <span class="tok-s">"Authorization: Bearer tskey-auth-abc123"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "name": "laptop-alex",
+      "os": "linux",
+      "wireguard_pubkey": "abcdef0123...",
+      "pqc_pubkey": "ML-KEM-768 bytes..."
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"machine_id"</span>: <span class="tok-s">"m_Pq7r2wXK"</span>,
+    <span class="tok-p">"node_key"</span>: <span class="tok-s">"nk_live_..."</span>,
+    <span class="tok-p">"tailnet_ip"</span>: <span class="tok-s">"100.64.1.42"</span>,
+    <span class="tok-p">"magicdns_name"</span>: <span class="tok-s">"laptop-alex.acme.zt.net"</span>,
+    <span class="tok-p">"derp_region"</span>: <span class="tok-s">"blr"</span>,
+    <span class="tok-p">"status"</span>: <span class="tok-s">"online"</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="124ms" />
+
+  <h3 id="heartbeat">POST /api/machine-heartbeat</h3>
+  <p>Called by the agent every 60 seconds. Returns peer list, DNS config, ACL rules, and any pending admin commands (wipe, lock, config push).</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-heartbeat</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $NODE_KEY"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "status": "online",
+      "endpoint": "52.34.12.88:41824",
+      "derp_region": "blr",
+      "posture": { "os_version": "24.04", "disk_encryption": true, "firewall": "ufw" }
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"peers"</span>: [ <span class="tok-c">/* 99 peer objects */</span> ],
+    <span class="tok-p">"dns_config"</span>: {
+      <span class="tok-p">"nameservers"</span>: [<span class="tok-s">"100.100.100.100"</span>],
+      <span class="tok-p">"search_domain"</span>: <span class="tok-s">"acme.zt.net"</span>
+    },
+    <span class="tok-p">"acl_rules"</span>: [ <span class="tok-c">/* evaluated rules */</span> ],
+    <span class="tok-p">"pending_commands"</span>: [],
+    <span class="tok-p">"posture_verdict"</span>: <span class="tok-s">"compliant"</span>,
+    <span class="tok-p">"quarantined"</span>: <span class="tok-k">false</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="58ms" />
+
+  <h3 id="machine-approve">POST /api/machine-admin (action: "approve")</h3>
+  <p>Approve a machine pending admin review. Required when org has <code>approval_required</code> enabled.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "action": "approve",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w"
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"machine_id"</span>: <span class="tok-s">"m_Pq7r2w"</span>,
+    <span class="tok-p">"status"</span>: <span class="tok-s">"online"</span>,
+    <span class="tok-p">"approved_at"</span>: <span class="tok-s">"2026-04-19T18:00:00Z"</span>,
+    <span class="tok-p">"approved_by"</span>: <span class="tok-s">"user_5k4aLw"</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="32ms" />
+
+  <h3 id="machine-quarantine">POST /api/machine-admin (action: "quarantine")</h3>
+  <p>Isolate a machine. Its tailnet IP stays allocated but ACL evaluation denies all traffic until unquarantined. Used for compromised devices or posture failures.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "action": "quarantine",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w",
+      "reason": "Posture failure: OS version outdated"
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: { <span class="tok-p">"machine_id"</span>: <span class="tok-s">"m_Pq7r2w"</span>, <span class="tok-p">"status"</span>: <span class="tok-s">"quarantined"</span> },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="28ms" />
+
+  <h3 id="machine-wipe">POST /api/machine-admin (action: "wipe_device")</h3>
+  <p>Issue a remote wipe command. Delivered via next heartbeat. The agent wipes local config, state, tokens, and uninstalls the service. Audit-logged with actor identity.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "action": "wipe_device",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w",
+      "confirm": "WIPE-m_Pq7r2w"
+    }'</span>` }]} />
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <h2 id="policies-endpoints" style="margin-top:64px;">Policies (ACL)</h2>
+
+  <h3 id="acl-evaluate">POST /api/acl-evaluate</h3>
+  <p>Evaluate a hypothetical connection against current ACLs. Returns allow/deny + the matched rule (or why no rule matched).</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/acl-evaluate</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "org_id": "org_9fX2kR",
+      "source_machine_id": "m_laptop_alex",
+      "destination_machine_id": "m_db_primary",
+      "port": 5432,
+      "protocol": "tcp",
+      "time_hour": 14,
+      "day_of_week": "thu",
+      "source_country": "IN"
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"verdict"</span>: <span class="tok-s">"ALLOW"</span>,
+    <span class="tok-p">"matched_rule_id"</span>: <span class="tok-s">"acl_7K9xq"</span>,
+    <span class="tok-p">"rule_name"</span>: <span class="tok-s">"laptops-to-prod-business-hours"</span>,
+    <span class="tok-p">"evaluated_conditions"</span>: {
+      <span class="tok-p">"src_tag"</span>: <span class="tok-s">"tag:laptop ✓"</span>,
+      <span class="tok-p">"dst_tag"</span>: <span class="tok-s">"tag:prod ✓"</span>,
+      <span class="tok-p">"port"</span>: <span class="tok-s">"5432 in 22,443,5432 ✓"</span>,
+      <span class="tok-p">"time"</span>: <span class="tok-s">"14:00 in 09-18 ✓"</span>,
+      <span class="tok-p">"source_country"</span>: <span class="tok-s">"IN ✓"</span>
+    }
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="18ms" />
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <h2 id="dns-endpoints" style="margin-top:64px;">DNS</h2>
+
+  <h3 id="dns-management">POST /api/dns-management</h3>
+  <p>Manage MagicDNS configuration — nameservers, search domain, resolver behaviour.</p>
+  <Callout type="warn" title="Action name gotcha">
+    Use <code>get_settings</code> (not <code>list_records</code>). The older name is documented elsewhere but will 404.
+  </Callout>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/dns-management</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "action": "get_settings",
+      "org_id": "org_9fX2kR"
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"magic_dns"</span>: <span class="tok-k">true</span>,
+    <span class="tok-p">"search_domain"</span>: <span class="tok-s">"acme.zt.net"</span>,
+    <span class="tok-p">"nameservers"</span>: [<span class="tok-s">"1.1.1.1"</span>, <span class="tok-s">"1.0.0.1"</span>],
+    <span class="tok-p">"override_local_dns"</span>: <span class="tok-k">false</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="22ms" />
+
+  <h3 id="dns-filter">POST /api/dns-filter (action: "update_policy")</h3>
+  <p>Update DNS blocklist + allowlist policy. Feature-gated by <code>dns_filtering</code> (free on all plans).</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/dns-filter</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "action": "update_policy",
+      "org_id": "org_9fX2kR",
+      "blocklist_categories": ["malware", "phishing", "ads"],
+      "allow_domains": ["github.com", "*.github.com"],
+      "block_domains": ["tiktok.com"]
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"policy_id"</span>: <span class="tok-s">"dnsp_K9xq"</span>,
+    <span class="tok-p">"blocklist_categories"</span>: [<span class="tok-s">"malware"</span>, <span class="tok-s">"phishing"</span>, <span class="tok-s">"ads"</span>],
+    <span class="tok-p">"allow_domains"</span>: [<span class="tok-s">"github.com"</span>, <span class="tok-s">"*.github.com"</span>],
+    <span class="tok-p">"block_domains"</span>: [<span class="tok-s">"tiktok.com"</span>],
+    <span class="tok-p">"updated_at"</span>: <span class="tok-s">"2026-04-19T18:00:00Z"</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="42ms" />
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <h2 id="ai-endpoints" style="margin-top:64px;">AI assistant</h2>
+
+  <h3 id="ai-chat">POST /api/ai-assist (action: "chat")</h3>
+  <p>Conversational Q&amp;A about your tenant. Claude-powered. Gated by <code>ai_chat</code> (free on all plans).</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/ai-assist</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "action": "chat",
+      "org_id": "org_9fX2kR",
+      "message": "Which machines went offline in the last hour?",
+      "conversation_id": null
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"conversation_id"</span>: <span class="tok-s">"conv_K9xq"</span>,
+    <span class="tok-p">"answer"</span>: <span class="tok-s">"Two machines went offline in the last hour: legacy-vpc (offline 47min ago, reason: heartbeat timeout) and eu-edge-07 (offline 12min ago, reason: scheduled maintenance). No others."</span>,
+    <span class="tok-p">"context_used"</span>: [<span class="tok-s">"machines"</span>, <span class="tok-s">"heartbeats"</span>]
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="1248ms" />
+
+  <h3 id="ai-generate-acl">POST /api/ai-assist (action: "generate_acl")</h3>
+  <p>English → ACL rule. Returns a ready-to-apply JSON policy. Gated by <code>nl_acl_builder</code> (free on all plans).</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/ai-assist</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "action": "generate_acl",
+      "org_id": "org_9fX2kR",
+      "description": "Engineers can SSH to prod servers 9-6 IST on weekdays from India"
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"rule"</span>: {
+      <span class="tok-p">"name"</span>: <span class="tok-s">"eng-ssh-prod-business-hours"</span>,
+      <span class="tok-p">"src"</span>: <span class="tok-s">"tag:engineer"</span>,
+      <span class="tok-p">"dst"</span>: <span class="tok-s">"tag:prod"</span>,
+      <span class="tok-p">"proto"</span>: <span class="tok-s">"tcp"</span>,
+      <span class="tok-p">"ports"</span>: <span class="tok-s">"22"</span>,
+      <span class="tok-p">"time_hour"</span>: <span class="tok-s">"09-18"</span>,
+      <span class="tok-p">"day_of_week"</span>: <span class="tok-s">"mon-fri"</span>,
+      <span class="tok-p">"source_country"</span>: <span class="tok-s">"IN"</span>
+    },
+    <span class="tok-p">"explanation"</span>: <span class="tok-s">"Generated ACL matches tag:engineer source to tag:prod dest on SSH (port 22), restricted to weekdays 09:00–18:00 IST from India."</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="1802ms" />
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <h2 id="governance-endpoints" style="margin-top:64px;">Governance</h2>
+
+  <h3 id="jit-request">POST /api/governance (action: "jit_request")</h3>
+  <p>Request time-bounded access to a resource. An approver gets notified; on approval the grant is active for the window and auto-revokes.</p>
+  <CodeBlock samples={[{ lang: "curl", code: `$ curl <span class="tok-u">https://login.quickztna.com/api/governance</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $TOKEN"</span> \\
+    -d <span class="tok-s">'{
+      "action": "jit_request",
+      "org_id": "org_9fX2kR",
+      "resource_type": "machine",
+      "resource_id": "m_db_primary",
+      "requested_duration": 3600,
+      "justification": "Debugging elevated-privilege migration issue #4782"
+    }'</span>` }]} />
+  <ResponseBlock status="200 OK" body={`{
+  <span class="tok-p">"success"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"data"</span>: {
+    <span class="tok-p">"grant_id"</span>: <span class="tok-s">"jit_Pq7r2w"</span>,
+    <span class="tok-p">"status"</span>: <span class="tok-s">"pending"</span>,
+    <span class="tok-p">"approvers_notified"</span>: [<span class="tok-s">"alice@acme.com"</span>, <span class="tok-s">"bob@acme.com"</span>],
+    <span class="tok-p">"expires_at"</span>: <span class="tok-s">"2026-04-19T19:00:00Z"</span>,
+    <span class="tok-p">"requested_at"</span>: <span class="tok-s">"2026-04-19T18:00:00Z"</span>
+  },
+  <span class="tok-p">"error"</span>: <span class="tok-k">null</span>
+}`} latency="68ms" />
+
+  <!-- ============ ERRORS ============ -->
+  <div class="api-section">
+    <h2 id="errors">Errors</h2>
+    <p>
+      QuickZTNA uses conventional HTTP status codes. 2xx = success, 4xx = client
+      error, 5xx = server-side. Every non-2xx response populates
+      <code>error.code</code> with a machine-readable string.
+    </p>
+    <div class="errors-table">
+      <div class="err-row head">
+        <div>Status</div>
+        <div>Code</div>
+        <div>Meaning</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">200</div>
+        <div class="err-name">—</div>
+        <div class="err-desc">Everything worked as expected.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">400</div>
+        <div class="err-name">VALIDATION_ERROR</div>
+        <div class="err-desc">Request body failed zod validation — often a missing or out-of-range parameter.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">400</div>
+        <div class="err-name">INVALID_JSON</div>
+        <div class="err-desc">Request body is not valid JSON.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">401</div>
+        <div class="err-name">UNAUTHORIZED</div>
+        <div class="err-desc">No token, expired token, or token blacklisted after password change.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">401</div>
+        <div class="err-name">INVALID_CREDENTIALS</div>
+        <div class="err-desc">Email + password did not match. Returned for non-existent emails too (timing-safe, anti-enumeration).</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">403</div>
+        <div class="err-name">FORBIDDEN</div>
+        <div class="err-desc">Valid token, wrong role — the action requires admin or owner on the org.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">403</div>
+        <div class="err-name">FEATURE_GATED</div>
+        <div class="err-desc">The feature is not included on your plan. See <a href="/pricing">pricing</a>.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">403</div>
+        <div class="err-name">CSRF_REJECTED</div>
+        <div class="err-desc">Origin header did not match an allowed origin. State-changing browser requests only.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">404</div>
+        <div class="err-name">NOT_FOUND</div>
+        <div class="err-desc">Resource doesn't exist, or you don't have access to the org it belongs to.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">409</div>
+        <div class="err-name">CONFLICT</div>
+        <div class="err-desc">Resource already exists or concurrent update conflict.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">429</div>
+        <div class="err-name">RATE_LIMITED</div>
+        <div class="err-desc">Too many requests — see <a href="#rate-limits">rate limits</a> below.</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">5xx</div>
+        <div class="err-name">INTERNAL_ERROR</div>
+        <div class="err-desc">Something failed on our side. Logged and alerted automatically.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PAGINATION ============ -->
+  <div class="api-section">
+    <h2 id="pagination">Pagination</h2>
+    <p>
+      List endpoints use limit + offset pagination. Pass <code>limit</code> and
+      <code>range_from</code>/<code>range_to</code> as query parameters.
+    </p>
+    <div class="params-table">
+      <ParamRow name="limit" type="integer" desc="Page size, 1–100. Default <code>20</code>." />
+      <ParamRow name="range_from" type="integer" desc="Offset to start from. Default <code>0</code>." />
+      <ParamRow name="range_to" type="integer" desc="Offset to end at (exclusive)." />
+      <ParamRow name="order" type="string" desc="Column to sort by. Must be an indexed column." />
+      <ParamRow name="ascending" type="boolean" desc="Sort direction. Default <code>true</code>." />
+    </div>
+  </div>
+
+  <!-- ============ RATE LIMITS ============ -->
+  <div class="api-section">
+    <h2 id="rate-limits">Rate limits</h2>
+    <p>
+      Rate limits are applied per IP and per email on authentication endpoints,
+      and per org on everything else. The client IP is detected via
+      <code>cf-connecting-ip</code> first (not spoofable), falling back to
+      <code>x-real-ip</code>.
+    </p>
+    <div class="limits-grid">
+      <div class="limit">
+        <div class="limit-val">10</div>
+        <div class="limit-label">login attempts / 5 min</div>
+        <span class="limit-plan">Per IP · Per email</span>
+      </div>
+      <div class="limit">
+        <div class="limit-val">5</div>
+        <div class="limit-label">signups / 5 min</div>
+        <span class="limit-plan">Per IP</span>
+      </div>
+      <div class="limit">
+        <div class="limit-val">200</div>
+        <div class="limit-label">WebSocket connections</div>
+        <span class="limit-plan">Per org</span>
+      </div>
+      <div class="limit">
+        <div class="limit-val">10</div>
+        <div class="limit-label">WS broadcasts / min</div>
+        <span class="limit-plan">Per client</span>
+      </div>
+      <div class="limit">
+        <div class="limit-val">5</div>
+        <div class="limit-label">MFA attempts / 5 min</div>
+        <span class="limit-plan">Per user</span>
+      </div>
+      <div class="limit">
+        <div class="limit-val">5</div>
+        <div class="limit-label">password resets / 5 min</div>
+        <span class="limit-plan">Per IP</span>
+      </div>
+    </div>
+    <p>
+      Exceeding a limit returns <code>429 RATE_LIMITED</code>. Login lockout
+      after 10 failed password attempts per email = 15-minute block; unlock is
+      automatic at the expiry timestamp.
+    </p>
+  </div>
+
+  <!-- ============ WEBSOCKET ============ -->
+  <div class="api-section">
+    <h2 id="realtime">WebSocket realtime</h2>
+    <p>
+      QuickZTNA exposes a single WebSocket at <code>/api/realtime</code> for
+      live updates on machines, members, audit, keys, posture, threats, certs,
+      DNS, ACL, billing, and remote desktop channels.
+    </p>
+
+    <Callout type="pqc" title="Token via subprotocol, not URL">
+      Token is passed in the <code>Sec-WebSocket-Protocol</code> header as
+      <code>access_token.&lt;jwt&gt;</code> — never in the URL. This prevents
+      tokens from leaking to proxy logs, CDN caches, or browser history.
+    </Callout>
+
+    <CodeBlock samples={[{
+      lang: "JavaScript",
+      code: `<span class="tok-k">const</span> ws = <span class="tok-k">new</span> <span class="tok-f">WebSocket</span>(
+  <span class="tok-s">'wss://login.quickztna.com/api/realtime?org_id=org_...'</span>,
+  [<span class="tok-s">\`access_token.\${jwt}\`</span>]
+);
+
+ws.<span class="tok-p">onopen</span> = () =&gt; {
+  ws.<span class="tok-f">send</span>(<span class="tok-f">JSON.stringify</span>({
+    <span class="tok-p">type</span>: <span class="tok-s">'subscribe'</span>,
+    <span class="tok-p">channels</span>: [<span class="tok-s">'machines'</span>, <span class="tok-s">'audit'</span>]
+  }));
+};
+
+ws.<span class="tok-p">onmessage</span> = (event) =&gt; {
+  <span class="tok-k">const</span> msg = <span class="tok-f">JSON.parse</span>(event.data);
+  <span class="tok-c">// { type: 'event', channel: 'machines', event: 'UPDATE', payload: {...} }</span>
+};`
+    }]} />
+  </div>
+
+  <!-- ============ DEPRECATED ============ -->
+  <div class="api-section">
+    <h2 id="deprecated">Deprecated fields</h2>
+    <p>
+      Some older field/action names silently fail or 404. Use the forms on the
+      left — not the forms on the right.
+    </p>
+    <div class="errors-table">
+      <div class="err-row head">
+        <div>Correct</div>
+        <div>Wrong</div>
+        <div>Context</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">create_auth_key</div>
+        <div class="err-name">create</div>
+        <div class="err-desc">/api/key-management action field</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">platform</div>
+        <div class="err-name">os</div>
+        <div class="err-desc">/api/client-version action: "check"</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">/api/export</div>
+        <div class="err-name">/api/export-data</div>
+        <div class="err-desc">Export endpoint</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">/api/ai-assist</div>
+        <div class="err-name">/api/functions/ai-assist</div>
+        <div class="err-desc">AI handler</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">get_settings</div>
+        <div class="err-name">list_records</div>
+        <div class="err-desc">/api/dns-management action</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">name</div>
+        <div class="err-name">new_name</div>
+        <div class="err-desc">Machine rename</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">name</div>
+        <div class="err-name">hostname</div>
+        <div class="err-desc">Machine registration</div>
+      </div>
+      <div class="err-row">
+        <div class="err-code">/api/manage-subscription</div>
+        <div class="err-name">/api/customer-portal</div>
+        <div class="err-desc">Billing management</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT RAIL (3-col code samples) ============ -->
+  <div slot="right-rail" class="api-right" data-resp-container>
+    <div class="resp-code-header">
+      <span class="resp-code-label">Request</span>
+    </div>
+    <CodeBlock samples={createAuthKeyRequest} />
+
+    <div class="resp-code-header">
+      <span class="resp-code-label">Response</span>
+      <div style="flex:1"></div>
+      <div class="resp-selector" data-resp-selector>
+        <button class="resp-opt active" data-status="200" type="button">200</button>
+        <button class="resp-opt" data-status="400" type="button">400</button>
+        <button class="resp-opt" data-status="401" type="button">401</button>
+        <button class="resp-opt" data-status="403" type="button">403</button>
+        <button class="resp-opt" data-status="429" type="button">429</button>
+      </div>
+    </div>
+    <div data-resp-status="200">
+      <ResponseBlock status="200 OK" body={responses200} latency="38ms" />
+    </div>
+    <div data-resp-status="400" style="display:none">
+      <ResponseBlock status="400 Bad Request" body={responses400} latency="12ms" />
+    </div>
+    <div data-resp-status="401" style="display:none">
+      <ResponseBlock status="401 Unauthorized" body={responses401} latency="8ms" />
+    </div>
+    <div data-resp-status="403" style="display:none">
+      <ResponseBlock status="403 Forbidden" body={responses403} latency="10ms" />
+    </div>
+    <div data-resp-status="429" style="display:none">
+      <ResponseBlock status="429 Too Many Requests" body={responses429} latency="5ms" />
+    </div>
+  </div>
+</DocsLayout>
+
+<style>
+  @media (min-width: 1101px) {
+    .main.three-col {
+      grid-template-columns: minmax(0, 1fr) 440px;
+    }
+  }
+  .api-right {
+    position: sticky;
+    top: calc(var(--topnav-h) + 24px);
+    max-height: calc(100vh - var(--topnav-h) - 40px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .api-right::-webkit-scrollbar { width: 6px; }
+  .api-right::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .api-section { margin-bottom: 64px; }
+  .api-section:last-child { margin-bottom: 0; }
+
+  .definition {
+    display: flex;
+    gap: 10px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 13px;
+    padding: 8px 14px;
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    margin: 0 0 20px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .resp-code-header {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+  .resp-code-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+  }
+
+  .resp-selector {
+    display: flex;
+    gap: 4px;
+    padding: 2px;
+    background: var(--bg-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .resp-opt {
+    padding: 3px 8px;
+    font-size: 11.5px;
+    font-family: 'Geist Mono', monospace;
+    color: var(--text-muted);
+    border-radius: 4px;
+  }
+  .resp-opt.active {
+    background: white;
+    color: var(--text);
+    font-weight: 500;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .errors-table {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    font-size: 13.5px;
+    margin: 16px 0;
+  }
+  .err-row {
+    display: grid;
+    grid-template-columns: 120px 200px 1fr;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    align-items: start;
+    gap: 12px;
+  }
+  .err-row:last-child { border-bottom: none; }
+  .err-row.head {
+    background: var(--bg-muted);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .err-code { font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--text); }
+  .err-name { font-family: 'Geist Mono', monospace; font-size: 12.5px; color: var(--text-secondary); }
+  .err-desc { color: var(--text-secondary); font-size: 13px; }
+
+  .limits-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin: 16px 0 20px;
+  }
+  .limit {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: white;
+  }
+  .limit-val {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-family: 'Geist Mono', monospace;
+  }
+  .limit-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .limit-plan {
+    font-size: 11px;
+    color: var(--brand);
+    background: var(--brand-light);
+    padding: 2px 6px;
+    border-radius: 3px;
+    display: inline-block;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+</style>

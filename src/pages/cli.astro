@@ -1,0 +1,791 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import ParamRow from "@/components/ParamRow.astro";
+import Callout from "@/components/Callout.astro";
+
+// Helper shorthand to build code samples
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="CLI Reference · QuickZTNA Docs"
+  description="Complete ztna CLI reference. 39 commands across 14 categories — login, up, status, peers, ping, ssh, dns, set, cert, secrets, acl, machines, posture, threat, audit, netcheck, debug, log, version, switch, profile, install. Every command with example + output."
+  current="cli"
+  sidebarVariant="default"
+  activeHref="/cli"
+  prev={{ href: "/quickstart", label: "Quickstart" }}
+  next={{ href: "/api", label: "API Reference" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>CLI Reference · ztna</div>
+  <h1>ztna CLI</h1>
+  <p class="lead">
+    The <code>ztna</code> command is QuickZTNA's device agent and admin tool.
+    Every device in your tailnet runs it — as a background service for the VPN,
+    and as an interactive CLI for status, diagnostics, and policy operations.
+    39 commands across 14 categories. Every command below is implemented in the
+    current release; no aspirational documentation.
+  </p>
+
+  <Callout type="info" title="Installing the CLI">
+    On every supported platform: <code>curl -fsSL https://login.quickztna.com/install.sh | sh</code> (Linux/macOS) or <code>irm https://login.quickztna.com/install.ps1 | iex</code> (Windows). Pre-auth rollout: add <code>ZTNA_AUTH_KEY=tskey-auth-xxx</code> to the environment.
+  </Callout>
+
+  <h2 id="global">Global environment + config</h2>
+  <p>
+    Every command respects these environment variables and reads/writes these files:
+  </p>
+  <div class="params-table">
+    <ParamRow name="ZTNA_AUTH_KEY" type="env" desc="Pre-auth key for headless login. When set, overrides all other auth methods. Used by <code>ztna login</code> and <code>ztna up</code>." />
+    <ParamRow name="QUICKZTNA_LOG_LEVEL" type="env" desc="Log level: <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>. Overridden by <code>--log-level</code> flag if present." />
+    <ParamRow name="~/.config/ztna/config.json" type="file" desc="API URL, org ID, hostname, DNS, route config." />
+    <ParamRow name="~/.config/ztna/state.json" type="file" desc="Machine ID, tailnet IP, WireGuard public key, DERP auth token." />
+    <ParamRow name="~/.config/ztna/tokens.json" type="file" desc="JWT access + refresh tokens." />
+    <ParamRow name="~/.config/ztna/ztna.log" type="file" desc="Daemon log (rotating, 10MB max, 2 backups)." />
+    <ParamRow name="~/.config/ztna/profiles.json" type="file" desc="Saved connection profiles for multi-org users." />
+    <ParamRow name="~/.config/ztna/ztna.pid" type="file" desc="Daemon PID (separate PID for userspace mode)." />
+  </div>
+  <Callout type="warn" title="Windows + admin behaviour">
+    Without administrator privileges, <code>ztna up</code> automatically falls back to <strong>userspace mode</strong> (no TUN device, no root required). TUN mode is only attempted if elevated. Log file location shifts to <code>%ProgramData%\QuickZTNA\ztna.log</code> on Windows.
+  </Callout>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="authentication">Authentication & session</h2>
+
+  <h3 id="login">ztna login</h3>
+  <p>Authenticate with the QuickZTNA control plane. Four supported methods: browser (default), auth key (headless), OAuth, interactive email+password.</p>
+  <div class="params-table">
+    <ParamRow name="--auth-key" type="string" desc="Pre-auth key for non-interactive login (<code>tskey-auth-xxx</code>). Alternative: set <code>ZTNA_AUTH_KEY</code> env var." />
+    <ParamRow name="--github" type="bool" desc="Authenticate via GitHub OAuth (opens browser)." />
+    <ParamRow name="--google" type="bool" desc="Authenticate via Google OAuth." />
+    <ParamRow name="--sso" type="string" desc="SSO login for a given org slug (<code>--sso acme</code>)." />
+    <ParamRow name="--interactive" type="bool" desc="Use terminal email/password prompts instead of browser." />
+    <ParamRow name="--timeout" type="duration" desc="Callback timeout. Default <code>5m</code>." />
+  </div>
+  <CodeBlock samples={[
+    s("Browser login", `$ ztna login
+<span class="tok-c">→ Opening browser at https://login.quickztna.com/auth?cli_state=...
+→ Waiting for callback on http://127.0.0.1:51823/callback
+✓ Authenticated as you@company.com
+✓ Org: acme (acme.zt.net)
+✓ Tokens saved to ~/.config/ztna/tokens.json</span>`),
+    s("Headless (auth key)", `$ ZTNA_AUTH_KEY=tskey-auth-abc123 ztna login
+<span class="tok-c">✓ Registered with pre-auth key
+✓ Machine ID: m_9fX2kR · Tailnet IP: 100.64.1.42
+✓ Tagged: tag:laptop, tag:prod</span>`),
+    s("SSO", `$ ztna login --sso acme
+<span class="tok-c">→ Redirecting to Okta for acme.zt.net
+✓ Authenticated via SAML assertion</span>`),
+  ]} />
+
+  <h3 id="logout">ztna logout</h3>
+  <p>Clear local tokens and authentication state. Org ID is preserved so re-login returns you to the same tenant.</p>
+  <CodeBlock samples={[s("Command", `$ ztna logout
+<span class="tok-c">✓ Cleared ~/.config/ztna/tokens.json
+✓ Preserved org_id (use \`ztna login\` to resume)</span>`)]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="lifecycle">Connection lifecycle</h2>
+
+  <h3 id="up">ztna up</h3>
+  <p><strong>Alias:</strong> <code>ztna connect</code>. Register the machine (if not registered) and bring the WireGuard tunnel online. Auto-detects elevation and falls back to userspace if not root/admin. On Windows the command auto-daemonizes after preflight; on Linux/macOS it stays foreground unless <code>--daemon</code>.</p>
+  <div class="params-table">
+    <ParamRow name="--auth-key" type="string" desc="Pre-auth key for non-interactive registration. Reads <code>ZTNA_AUTH_KEY</code> if unset." />
+    <ParamRow name="--hostname" type="string" desc="Override machine hostname." />
+    <ParamRow name="--advertise-exit-node" type="bool" desc="Offer this machine as an exit node for other peers." />
+    <ParamRow name="--exit-node" type="string" desc="Route all outbound traffic through a peer (IP or <code>auto</code>)." />
+    <ParamRow name="--exit-node-allow-lan-access" type="bool" desc="Keep local LAN reachable when routing through an exit node." />
+    <ParamRow name="--advertise-routes" type="string" desc="Comma-separated CIDRs to advertise (e.g. <code>10.0.0.0/24,10.1.0.0/24</code>)." />
+    <ParamRow name="--advertise-tags" type="string" desc="Apply ACL tags (<code>tag:prod,tag:k8s</code>)." />
+    <ParamRow name="--accept-routes" type="bool" desc="Accept subnet routes advertised by peers." />
+    <ParamRow name="--gateway" type="bool" desc="Run as subnet gateway (headless, requires <code>--advertise-routes</code>)." />
+    <ParamRow name="--shields-up" type="bool" desc="Block all incoming connections." />
+    <ParamRow name="--ssh" type="bool" desc="Enable SSH server on the tailnet IP." />
+    <ParamRow name="--dns" type="bool" desc="Enable MagicDNS. Default <code>true</code>." />
+    <ParamRow name="--dns-domain" type="string" desc="DNS search domain." />
+    <ParamRow name="--userspace" type="bool" desc="Force userspace networking (no TUN device)." />
+    <ParamRow name="--operator" type="string" desc="Allow non-root user to manage the tunnel." />
+    <ParamRow name="--daemon" type="bool" desc="Run VPN in background; logs to <code>~/.config/ztna/ztna.log</code>." />
+    <ParamRow name="--force-reauth" type="bool" desc="Force re-authentication before connecting." />
+    <ParamRow name="--reset" type="bool" desc="Reset all preferences to default." />
+  </div>
+  <CodeBlock samples={[
+    s("Fresh install + connect", `$ ztna up --auth-key tskey-auth-abc123 --hostname laptop-alex --advertise-tags tag:laptop,tag:eng
+<span class="tok-c">→ Detecting elevation... root ✓
+→ Loading WireGuard kernel module... ✓
+→ Generating ML-KEM-768 + X25519 hybrid keypair
+→ Registering machine "laptop-alex"
+✓ Machine ID: m_Pq7r2w · Tailnet IP: 100.64.1.42
+✓ MagicDNS: laptop-alex.acme.zt.net
+→ Exchanging keys with 99 peers (48 direct / 51 via DERP)
+→ All peers configured with hybrid PSK
+✓ Tunnel up — connected as you@company.com, quantum-safe</span>`),
+    s("Userspace (no root)", `$ ztna up
+<span class="tok-c">⚠ Not running as root — falling back to userspace mode (no TUN)
+→ Userspace stack (netstack/gVisor) listening
+✓ Connected — SSH/HTTPS to peers works; kernel routing does not</span>`),
+    s("Subnet gateway", `$ sudo ztna up --gateway --advertise-routes 10.0.0.0/16,192.168.5.0/24 --accept-routes
+<span class="tok-c">→ IP forwarding enabled (sysctl net.ipv4.ip_forward=1)
+→ Advertising 2 subnet routes (pending admin approval)
+✓ Gateway online</span>`),
+  ]} />
+  <Callout type="warn" title="PID locking">
+    Only one VPN instance can run per user. Running <code>ztna up</code> a second time will refuse to start — see <code>~/.config/ztna/ztna.pid</code>. TUN and userspace modes use separate PID files.
+  </Callout>
+
+  <h3 id="down">ztna down</h3>
+  <p><strong>Alias:</strong> <code>ztna disconnect</code>. Stop the tunnel, kill the daemon, and send an offline heartbeat so the control plane marks this machine offline immediately.</p>
+  <div class="params-table">
+    <ParamRow name="--accept-risk" type="string" desc="Confirm risky action (e.g. <code>--accept-risk lose-ssh</code> when you're SSH-connected through the tunnel you're tearing down)." />
+  </div>
+  <CodeBlock samples={[s("Command", `$ ztna down
+<span class="tok-c">→ Sending offline heartbeat
+→ Stopping daemon (PID 24891)
+→ Removing WireGuard interface
+✓ Disconnected. Use \`ztna up\` to reconnect.</span>`)]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="status">Status & inventory</h2>
+
+  <h3 id="status-cmd">ztna status</h3>
+  <p>One-shot status: machine info, auth state, tailnet IP, DERP region, peer summary, ACL-blocked peers, exit node config.</p>
+  <div class="params-table">
+    <ParamRow name="--json" type="bool" desc="Output as JSON (machine-parseable)." />
+    <ParamRow name="--active" type="bool" desc="Only include online peers in output." />
+    <ParamRow name="--peers" type="bool" desc="Include peer list. Default <code>true</code>." />
+  </div>
+  <CodeBlock samples={[
+    s("Human readable", `$ ztna status
+<span class="tok-c">QuickZTNA v3.2.0 · linux-amd64
+────────────────────────────────
+● Connected — quantum-safe (PQC active)
+  Tailnet:  acme.zt.net (org_9fX2kR)
+  Machine:  laptop-alex · 100.64.1.42
+  Mode:     TUN (kernel) · MTU 1280
+  DERP:     derp-blr (38ms)
+  Peers:    99 online · 0 offline · 0 ACL-blocked
+  Exit:     (none)
+
+Recent peers (top 5):
+  db-primary      100.64.1.12  4.2ms  direct · tag:prod
+  ci-runner-03    100.64.1.18  38ms   direct · tag:ci
+  eu-edge-07      100.64.1.31  172ms  derp-lon
+  ...</span>`),
+    s("JSON", `$ ztna status --json
+{
+  <span class="tok-p">"version"</span>: <span class="tok-s">"3.2.0"</span>,
+  <span class="tok-p">"connected"</span>: <span class="tok-k">true</span>,
+  <span class="tok-p">"machine_id"</span>: <span class="tok-s">"m_Pq7r2w"</span>,
+  <span class="tok-p">"tailnet_ip"</span>: <span class="tok-s">"100.64.1.42"</span>,
+  <span class="tok-p">"mode"</span>: <span class="tok-s">"tun"</span>,
+  <span class="tok-p">"derp_region"</span>: <span class="tok-s">"blr"</span>,
+  <span class="tok-p">"peers_online"</span>: <span class="tok-n">99</span>,
+  <span class="tok-p">"peers_offline"</span>: <span class="tok-n">0</span>,
+  <span class="tok-p">"peers"</span>: [{ <span class="tok-c">/* ... */</span> }]
+}`),
+  ]} />
+
+  <h3 id="peers">ztna peers</h3>
+  <p>List all peers (or one specific peer) with NAT traversal and connection details.</p>
+  <div class="params-table">
+    <ParamRow name="&lt;name&gt;" type="arg" desc="Optional specific peer to detail." />
+    <ParamRow name="--json" type="bool" desc="Machine-parseable output." />
+    <ParamRow name="--active" type="bool" desc="Only reachable peers." />
+  </div>
+  <CodeBlock samples={[s("List", `$ ztna peers --active
+<span class="tok-c">NAME              TAILNET IP     PATH    LATENCY  TAGS             LAST SEEN
+laptop-alex       100.64.1.42    self    —        tag:laptop       now
+db-primary        100.64.1.12    direct  4.2ms    tag:prod         5s ago
+ci-runner-03      100.64.1.18    direct  38ms     tag:ci           20s ago
+eu-edge-07        100.64.1.31    derp    172ms    tag:edge         45s ago
+legacy-vpc        100.64.1.55    direct  12ms     tag:legacy       1m ago
+...</span>`), s("Single peer", `$ ztna peers db-primary
+<span class="tok-c">Name:          db-primary
+Tailnet IP:    100.64.1.12
+MagicDNS:      db-primary.acme.zt.net
+Endpoint:      52.34.12.88:41824 (direct)
+DERP:          blr (fallback available)
+Tags:          tag:prod, tag:db
+Advertised:    10.0.0.0/16
+Exit node:     no
+Last seen:     5 seconds ago
+RX/TX:         124 MB / 38 MB
+PQC:           enabled (ML-KEM-768)</span>`)]} />
+
+  <h3 id="ip">ztna ip</h3>
+  <p>Show this machine's tailnet IP, or look up a peer's IP by name.</p>
+  <CodeBlock samples={[
+    s("Self", `$ ztna ip
+<span class="tok-c">100.64.1.42</span>`),
+    s("Peer lookup", `$ ztna ip db-primary
+<span class="tok-c">100.64.1.12</span>`),
+  ]} />
+
+  <h3 id="whois">ztna whois</h3>
+  <p>Reverse lookup: find which machine owns a tailnet IP.</p>
+  <CodeBlock samples={[s("Command", `$ ztna whois 100.64.1.18
+<span class="tok-c">Machine:  ci-runner-03
+ID:       m_Kx9j4m
+IP:       100.64.1.18
+Owner:    bot@acme.com
+Endpoint: 34.72.91.44:41824
+DERP:     blr · online
+Tags:     tag:ci, tag:ephemeral</span>`)]} />
+
+  <h3 id="machines-list">ztna machines list</h3>
+  <p>List every machine in your org. Admin-only commands (approve, quarantine, delete) are in the dashboard or via REST API.</p>
+  <CodeBlock samples={[s("Command", `$ ztna machines list
+<span class="tok-c">NAME              IP             OS          STATUS   TAGS              LAST SEEN
+laptop-alex       100.64.1.42    linux       online   tag:laptop        now
+db-primary        100.64.1.12    linux       online   tag:prod,tag:db   5s ago
+ci-runner-03      100.64.1.18    linux       online   tag:ci            20s ago
+legacy-vpc        100.64.1.55    linux       offline  tag:legacy        4h ago
+...
+Total: 100 machines (99 online, 1 offline)</span>`)]} />
+
+  <h3 id="auth-keys-list">ztna auth-keys list</h3>
+  <p>List auth keys in your org. Admin-only — backend returns 403 for non-admins.</p>
+  <CodeBlock samples={[s("Command", `$ ztna auth-keys list
+<span class="tok-c">PREFIX             REUSABLE  EPHEMERAL  USES  TAGS              EXPIRES
+tskey-auth-abc12…  yes       no         87    tag:laptop        in 45 min
+tskey-auth-xyz78…  no        yes        1     tag:ci            used
+tskey-auth-qwe45…  yes       no         0     tag:prod          revoked</span>`)]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="networking">Networking commands</h2>
+
+  <h3 id="ping">ztna ping</h3>
+  <p>Ping a peer through the mesh. Tries three paths: IPC (accurate tunnel latency), control-plane ping (userspace fallback), raw ICMP (TUN fallback).</p>
+  <div class="params-table">
+    <ParamRow name="&lt;target&gt;" type="arg" required={true} desc="Peer name, MagicDNS name, or tailnet IP." />
+    <ParamRow name="--count" type="int" desc="Number of probes. Default <code>5</code>." />
+    <ParamRow name="--timeout" type="duration" desc="Per-probe timeout. Default <code>3s</code>." />
+  </div>
+  <CodeBlock samples={[s("Command", `$ ztna ping db-primary
+<span class="tok-c">PING db-primary.acme.zt.net (100.64.1.12) via WireGuard (PQC)
+pqc_pong bytes=64 ttl=64 time=4.2ms path=direct
+pqc_pong bytes=64 ttl=64 time=4.5ms path=direct
+pqc_pong bytes=64 ttl=64 time=4.1ms path=direct
+pqc_pong bytes=64 ttl=64 time=4.8ms path=direct
+pqc_pong bytes=64 ttl=64 time=4.3ms path=direct
+
+5 probes sent, 5 received, 0% loss
+min/avg/max = 4.1ms / 4.38ms / 4.8ms</span>`)]} />
+
+  <h3 id="nc">ztna nc</h3>
+  <p>Netcat-like TCP tunnel through the mesh. Pipes stdin/stdout to/from a peer's port.</p>
+  <CodeBlock samples={[
+    s("Interactive", `$ ztna nc db-primary 5432
+<span class="tok-c"># Connected — raw TCP stream. Type bytes, see bytes. Ctrl+D to close.</span>`),
+    s("Scripted", `$ echo -e "GET / HTTP/1.0\\r\\n\\r\\n" | ztna nc web-internal 80
+<span class="tok-c">HTTP/1.0 200 OK
+Content-Type: text/html
+...</span>`),
+  ]} />
+
+  <h3 id="ssh">ztna ssh</h3>
+  <p>SSH to a peer through the tailnet. Resolves the peer name to its tailnet IP and invokes your system <code>ssh</code> with <code>StrictHostKeyChecking=accept-new</code>.</p>
+  <CodeBlock samples={[
+    s("Default user", `$ ztna ssh db-primary
+<span class="tok-c"># Resolved db-primary → 100.64.1.12, connecting as alex@100.64.1.12
+Welcome to db-primary (Ubuntu 24.04 LTS)</span>`),
+    s("Specific user + ssh flags", `$ ztna ssh root@db-primary -- -p 2222 -L 5432:localhost:5432
+<span class="tok-c"># Forwards local 5432 to remote postgres on port 2222</span>`),
+  ]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="dns">DNS commands</h2>
+
+  <h3 id="dns-query">ztna dns query</h3>
+  <p>Resolve a hostname via MagicDNS. Tries the hostname as-is, then appends the search domain if not found.</p>
+  <CodeBlock samples={[s("Command", `$ ztna dns query db-primary
+<span class="tok-c">100.64.1.12 (db-primary.acme.zt.net)
+
+$ ztna dns query db-primary.acme.zt.net
+100.64.1.12</span>`)]} />
+
+  <h3 id="dns-status">ztna dns status</h3>
+  <p>Show DNS resolver configuration.</p>
+  <CodeBlock samples={[s("Command", `$ ztna dns status
+<span class="tok-c">MagicDNS:      enabled
+Search domain: acme.zt.net
+Resolver:      100.100.100.100
+Upstream:      1.1.1.1, 1.0.0.1</span>`)]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="config">Configuration</h2>
+
+  <h3 id="set">ztna set</h3>
+  <p>Modify settings dynamically without restarting the tunnel. All flags are optional; each one changes just one setting.</p>
+  <div class="params-table">
+    <ParamRow name="--hostname" type="string" desc="Change machine name." />
+    <ParamRow name="--exit-node" type="string" desc="Use exit node (peer IP, <code>auto</code>, or <code>off</code>)." />
+    <ParamRow name="--exit-node-allow-lan-access" type="bool" desc="Keep LAN reachable with exit node." />
+    <ParamRow name="--advertise-exit-node" type="bool" desc="Offer this machine as exit node." />
+    <ParamRow name="--advertise-routes" type="string" desc="Advertise CIDRs." />
+    <ParamRow name="--shields-up" type="bool" desc="Block incoming connections." />
+    <ParamRow name="--ssh" type="bool" desc="Enable SSH server on tailnet IP." />
+    <ParamRow name="--accept-routes" type="bool" desc="Accept peer routes." />
+    <ParamRow name="--auto-update" type="bool" desc="Enable auto-updates." />
+    <ParamRow name="--tags" type="string" desc="Set machine tags." />
+  </div>
+  <CodeBlock samples={[
+    s("Change hostname", `$ ztna set --hostname laptop-alex-new
+<span class="tok-c">✓ Hostname updated to "laptop-alex-new"
+✓ Control plane notified</span>`),
+    s("Route through exit node", `$ ztna set --exit-node eu-edge-07
+<span class="tok-c">✓ Exit node: eu-edge-07 (100.64.1.31)
+✓ All outbound traffic now routed through exit node</span>`),
+    s("Stop exit-node routing", `$ ztna set --exit-node off`),
+  ]} />
+
+  <h3 id="route">ztna route list</h3>
+  <p>List advertised and approved subnet routes across the tailnet.</p>
+  <div class="params-table">
+    <ParamRow name="--machine" type="string" desc="Filter to one machine." />
+    <ParamRow name="--json" type="bool" desc="Machine-parseable output." />
+  </div>
+  <CodeBlock samples={[s("Command", `$ ztna route list
+<span class="tok-c">MACHINE          IP             ADVERTISED           APPROVED           EXIT NODE
+laptop-alex      100.64.1.42    —                    —                  no
+db-primary       100.64.1.12    10.0.0.0/16          10.0.0.0/16        no
+eu-edge-07       100.64.1.31    0.0.0.0/0, ::/0      0.0.0.0/0, ::/0    yes
+legacy-vpc       100.64.1.55    192.168.5.0/24       (pending)          no</span>`)]} />
+
+  <h3 id="route-admin">ztna route approve / reject / approve-exit-node / reject-exit-node</h3>
+  <p>Approve or reject advertised routes for a machine. <strong>Hidden from <code>-h</code> output</strong> (admin-only — backend enforces role).</p>
+  <CodeBlock samples={[
+    s("Approve all advertised routes", `$ ztna route approve legacy-vpc
+<span class="tok-c">✓ Approved 1 route for legacy-vpc:
+  - 192.168.5.0/24</span>`),
+    s("Approve specific routes only", `$ ztna route approve db-primary --routes 10.0.0.0/24,10.0.1.0/24`),
+    s("Approve exit node", `$ ztna route approve-exit-node eu-edge-07
+<span class="tok-c">✓ eu-edge-07 approved as exit node</span>`),
+    s("Reject", `$ ztna route reject legacy-vpc
+$ ztna route reject-exit-node eu-edge-07`),
+  ]} />
+
+  <h3 id="exit-node">ztna exit-node list / suggest</h3>
+  <p>Discover and rank exit nodes available in your tailnet.</p>
+  <CodeBlock samples={[
+    s("List", `$ ztna exit-node list
+<span class="tok-c">NAME           IP             DERP    ONLINE  APPROVED  SELECTED
+eu-edge-07     100.64.1.31    lon     yes     yes       *
+us-edge-03     100.64.1.88    nyc     yes     yes
+apac-edge-01   100.64.1.120   blr     yes     yes       </span>`),
+    s("Suggest", `$ ztna exit-node suggest
+<span class="tok-c">Best match: apac-edge-01 (100.64.1.120)
+Reason:     same DERP region (blr) · 28ms RTT · online · approved
+To use:     ztna set --exit-node apac-edge-01</span>`),
+  ]} />
+
+  <h3 id="split-tunnel">ztna split-tunnel list</h3>
+  <p>Show CIDRs that bypass the VPN (split-tunneling).</p>
+  <CodeBlock samples={[s("Command", `$ ztna split-tunnel list
+<span class="tok-c">BYPASS CIDR        REASON
+10.100.0.0/16      LAN (RFC1918)
+169.254.0.0/16     Link-local
+224.0.0.0/4        Multicast</span>`)]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="certs-secrets">Certificates & secrets</h2>
+
+  <h3 id="cert">ztna cert</h3>
+  <p>Issue a TLS certificate for a tailnet hostname. Signed by the per-org internal CA. No wildcards.</p>
+  <div class="params-table">
+    <ParamRow name="[domain]" type="arg" desc="Defaults to this machine's registered name." />
+    <ParamRow name="--cert-file" type="string" desc="Output path for cert (default <code>DOMAIN.crt</code>)." />
+    <ParamRow name="--key-file" type="string" desc="Output path for key (default <code>DOMAIN.key</code>)." />
+    <ParamRow name="--serve-demo" type="bool" desc="Start demo HTTPS server on :443 using the issued cert." />
+  </div>
+  <CodeBlock samples={[
+    s("Issue for this machine", `$ ztna cert
+<span class="tok-c">→ Requesting cert for laptop-alex.acme.zt.net
+✓ Certificate:  laptop-alex.acme.zt.net.crt (signed by acme-root-ca)
+✓ Private key:  laptop-alex.acme.zt.net.key
+✓ Valid until:  2026-07-19 · 90 days</span>`),
+    s("Demo server", `$ sudo ztna cert --serve-demo
+<span class="tok-c">→ Issuing cert · serving on https://laptop-alex.acme.zt.net
+→ Visit from another peer to confirm TLS is trusted</span>`),
+  ]} />
+
+  <h3 id="secrets">ztna secrets list / get / set / delete / rotate</h3>
+  <p>Encrypted secrets vault (Business+ plan). AES-256-GCM, per-org DEK, role-scoped access.</p>
+  <div class="params-table">
+    <ParamRow name="--value" type="string" desc="Secret value (reads from stdin if omitted)." />
+    <ParamRow name="--description" type="string" desc="Secret description." />
+    <ParamRow name="--category" type="string" desc="<code>generic</code>, <code>database</code>, <code>api_key</code>, <code>ssh_key</code>, <code>certificate</code>, or <code>token</code>. Default <code>generic</code>." />
+  </div>
+  <CodeBlock samples={[
+    s("List", `$ ztna secrets list
+<span class="tok-c">NAME              CATEGORY    VERSION  ROLES            ROTATED       EXPIRES
+db-password       database    3        admin,dba        2 days ago    in 88 days
+github-token      api_key     1        admin,ci         3 hours ago   in 30 days
+ssh-deploy-key    ssh_key     2        admin,deploy     1 month ago   in 60 days</span>`),
+    s("Get (safe for piping)", `$ export PG_PASSWORD=$(ztna secrets get db-password)
+$ ztna secrets get github-token
+<span class="tok-c">ghp_A9b2cX8d...</span>`),
+    s("Set from stdin", `$ echo "my-super-secret" | ztna secrets set stripe-key --category api_key
+<span class="tok-c">✓ Secret stripe-key created (v1) · category api_key</span>`),
+    s("Rotate", `$ ztna secrets rotate db-password
+<span class="tok-c">✓ Rotated db-password → v4
+✓ Old value retained for 24h (grace period)</span>`),
+    s("Delete", `$ ztna secrets delete stripe-key
+<span class="tok-c">✓ Secret stripe-key deleted (soft-delete; recoverable for 30d)</span>`),
+  ]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="acl">Access control</h2>
+
+  <h3 id="acl-list">ztna acl list</h3>
+  <p>Show current ACL rules for your org.</p>
+  <CodeBlock samples={[s("Command", `$ ztna acl list
+<span class="tok-c">[
+  {
+    "id": "acl_7K9xq",
+    "src": "tag:laptop",
+    "dst": "tag:prod",
+    "proto": "tcp",
+    "ports": "22,443,5432",
+    "time_hour": "09-18",
+    "day_of_week": "mon-fri",
+    "source_country": "IN"
+  },
+  {
+    "id": "acl_8Ly4r",
+    "src": "tag:admin",
+    "dst": "*",
+    "proto": "*",
+    "ports": "*"
+  }
+]</span>`)]} />
+
+  <h3 id="acl-test">ztna acl test</h3>
+  <p>Simulate an ACL check. Can source reach destination on this port?</p>
+  <div class="params-table">
+    <ParamRow name="--src" type="string" required={true} desc="Source machine name or ID." />
+    <ParamRow name="--dst" type="string" required={true} desc="Destination machine name or ID." />
+    <ParamRow name="--port" type="int" required={true} desc="Destination port." />
+    <ParamRow name="--proto" type="string" desc="<code>tcp</code>, <code>udp</code>, <code>icmp</code>, or <code>*</code>. Default <code>*</code>." />
+  </div>
+  <CodeBlock samples={[
+    s("Allowed", `$ ztna acl test --src laptop-alex --dst db-primary --port 5432 --proto tcp
+<span class="tok-c">✓ ALLOW
+
+Matched rule: acl_7K9xq
+  src:           tag:laptop
+  dst:           tag:prod
+  port 5432:     in 22,443,5432 ✓
+  time:          14:23 UTC (Thursday) ✓ (09-18 mon-fri)
+  source_country IN ✓</span>`),
+    s("Denied", `$ ztna acl test --src laptop-alex --dst db-primary --port 3306
+<span class="tok-c">✗ DENY
+
+No matching rule (port 3306 not in any allow rule)
+Default policy: deny</span>`),
+  ]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="posture">Posture & security</h2>
+
+  <h3 id="posture-status">ztna posture status</h3>
+  <p>Show device posture compliance — OS version, disk encryption, firewall, AV — and server verdict.</p>
+  <CodeBlock samples={[s("Command", `$ ztna posture status
+<span class="tok-c">Device Posture · laptop-alex
+─────────────────────────────
+OS Version:           Ubuntu 24.04.1 LTS     ✓ (required: 22.04+)
+Disk Encryption:      LUKS2 (active)         ✓
+Firewall:             ufw (enabled)          ✓
+Antivirus:            clamav (active)        ✓
+Screen Lock:          enabled (5min)         ✓
+Auto-Update:          enabled                ✓
+
+Server Verdict: COMPLIANT — all posture checks pass
+Policy:         posture-strict-prod (org default)</span>`)]} />
+
+  <h3 id="threat">ztna threat check</h3>
+  <p>Query threat intelligence feeds for IP, domain, or file hash. Auto-detects target type.</p>
+  <CodeBlock samples={[s("Command", `$ ztna threat check 185.220.101.42
+<span class="tok-c">Target:      185.220.101.42 (IPv4)
+Confidence:  98% malicious
+
+Sources:
+  AbuseIPDB:     reported 47 times (last 7d)
+  VirusTotal:    flagged by 12/88 engines
+  QuickZTNA IOC: match — category: tor-exit-node
+
+Recommendation: BLOCK</span>`)]} />
+
+  <h3 id="audit">ztna audit list</h3>
+  <p>List recent audit log entries. Scoped to your org.</p>
+  <div class="params-table">
+    <ParamRow name="--days" type="int" desc="Days to look back. Default <code>7</code>." />
+    <ParamRow name="--format" type="string" desc="<code>json</code> or <code>csv</code>. Default <code>json</code>." />
+  </div>
+  <CodeBlock samples={[s("Command", `$ ztna audit list --days 1 --format csv | head -5
+<span class="tok-c">timestamp,org_id,user_id,action,resource_type,resource_id,ip_address
+2026-04-19T17:32:04Z,org_9fX2kR,user_5k4aLw,auth.login,user,user_5k4aLw,104.28.42.88
+2026-04-19T17:34:12Z,org_9fX2kR,user_5k4aLw,auth_key.created,auth_key,ak_Pq7r,104.28.42.88
+2026-04-19T17:45:01Z,org_9fX2kR,bot_CI,machine.registered,machine,m_K9xq,34.72.91.44
+2026-04-19T18:02:18Z,org_9fX2kR,user_5k4aLw,acl_rule.updated,acl_rule,acl_7K9xq,104.28.42.88</span>`)]} />
+
+  <h3 id="compliance">ztna compliance report</h3>
+  <p>Aggregate compliance snapshot: machines, posture rate, ACL counts, certs, threats. Useful for monthly review.</p>
+  <CodeBlock samples={[s("Command", `$ ztna compliance report --json
+{
+  <span class="tok-p">"generated_at"</span>: <span class="tok-s">"2026-04-19T18:00:00Z"</span>,
+  <span class="tok-p">"org_id"</span>: <span class="tok-s">"org_9fX2kR"</span>,
+  <span class="tok-p">"machines"</span>: { <span class="tok-p">"total"</span>: <span class="tok-n">100</span>, <span class="tok-p">"online"</span>: <span class="tok-n">97</span>, <span class="tok-p">"quarantined"</span>: <span class="tok-n">1</span> },
+  <span class="tok-p">"posture"</span>: { <span class="tok-p">"compliant"</span>: <span class="tok-n">96</span>, <span class="tok-p">"non_compliant"</span>: <span class="tok-n">4</span>, <span class="tok-p">"rate"</span>: <span class="tok-n">96</span> },
+  <span class="tok-p">"acl"</span>: { <span class="tok-p">"rules"</span>: <span class="tok-n">18</span>, <span class="tok-p">"deny_default"</span>: <span class="tok-k">true</span> },
+  <span class="tok-p">"certs"</span>: { <span class="tok-p">"active"</span>: <span class="tok-n">42</span>, <span class="tok-p">"expiring_30d"</span>: <span class="tok-n">3</span> },
+  <span class="tok-p">"threats"</span>: { <span class="tok-p">"detected_7d"</span>: <span class="tok-n">12</span>, <span class="tok-p">"blocked_7d"</span>: <span class="tok-n">12</span> }
+}`)]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="diagnostics">Diagnostics</h2>
+
+  <h3 id="netcheck">ztna netcheck</h3>
+  <p>Network reachability probe. Tests UDP, STUN, DERP, and NAT type. Run this first when something isn't connecting.</p>
+  <CodeBlock samples={[s("Command", `$ ztna netcheck
+<span class="tok-c">QuickZTNA netcheck — 2026-04-19T18:03:12Z
+────────────────────────────────────────
+UDP:            OK
+IPv4:           104.28.42.88
+IPv6:           2606:4700::1
+Public UDP:     104.28.42.88:51823
+NAT type:       endpoint-independent (full cone)
+STUN (blr):     OK · 38ms
+STUN (nyc):     OK · 204ms
+STUN (lon):     OK · 172ms
+STUN (sfo):     OK · 242ms
+Nearest DERP:   blr (38ms) — preferred
+DERP blr TLS:   OK · TLS 1.3 · X25519Kyber768
+
+Verdict: OK — direct P2P should succeed for most peers</span>`)]} />
+
+  <h3 id="debug">ztna debug goroutines / derp / metrics</h3>
+  <p>Developer diagnostics. <code>goroutines</code> dumps all stacks; <code>derp</code> shows relay state; <code>metrics</code> dumps daemon counters.</p>
+  <CodeBlock samples={[
+    s("debug goroutines", `$ ztna debug goroutines | head -20
+<span class="tok-c">goroutine 1 [running]:
+runtime/pprof.writeGoroutineStacks(...)
+...
+goroutine 42 [select, 3 minutes]:
+ztna/client/pkg/agent.(*Agent).heartbeatLoop(...)</span>`),
+    s("debug derp", `$ ztna debug derp
+<span class="tok-c">DERP home region:  blr (139.59.26.108)
+STUN:              stun.quickztna.com:3478
+Connected:         yes (TLS 1.3)
+Peers via relay:   4
+Peers direct:      95
+
+Peer path table:
+  db-primary      direct   52.34.12.88:41824
+  eu-edge-07      derp     via lon (172ms)
+  ...</span>`),
+    s("debug metrics", `$ ztna debug metrics
+<span class="tok-c">version:           3.2.0
+os/arch:           linux/amd64
+go:                1.24.2
+goroutines:        47
+derp:              blr
+dns enabled:       true
+userspace:         false</span>`),
+  ]} />
+
+  <h3 id="log">ztna log</h3>
+  <p>Tail the daemon log. Follows like <code>tail -f</code> when <code>-f</code>.</p>
+  <div class="params-table">
+    <ParamRow name="-f, --follow" type="bool" desc="Follow output." />
+    <ParamRow name="-n, --lines" type="int" desc="Number of recent lines. Default <code>50</code>." />
+    <ParamRow name="--clear" type="bool" desc="Truncate the log file." />
+  </div>
+  <CodeBlock samples={[s("Command", `$ ztna log -n 5
+<span class="tok-c">2026-04-19T17:45:02.113Z INFO  agent: peer db-primary path changed direct → derp-lon
+2026-04-19T17:45:02.201Z INFO  dns: refreshed MagicDNS zone (100 entries)
+2026-04-19T17:45:10.004Z INFO  agent: peer db-primary path changed derp-lon → direct
+2026-04-19T17:45:12.887Z INFO  heartbeat: 99/99 peers reachable
+2026-04-19T17:45:15.012Z DEBUG pqc: rotated PSK for peer ci-runner-03 (age 24h)</span>`)]} />
+
+  <h3 id="bugreport">ztna bugreport</h3>
+  <p>Generate a diagnostic zip for support. Sanitized: private keys and tokens are stripped; logs are capped to 200 KB; config is redacted.</p>
+  <CodeBlock samples={[s("Command", `$ ztna bugreport --output /tmp/issue.zip
+<span class="tok-c">Collecting bugreport...
+  ✓ Sanitized config
+  ✓ Redacted state
+  ✓ Last 200 KB of daemon log
+  ✓ Status snapshot
+  ✓ System info (OS, kernel, arch)
+
+Bundle: /tmp/issue.zip (38 KB)
+Email to: support@quickztna.com</span>`)]} />
+
+  <h3 id="metrics">ztna metrics print / write</h3>
+  <p>Expose Prometheus-format metrics. <code>print</code> dumps to stdout; <code>write</code> atomically writes to a file (for <code>node_exporter --collector.textfile.directory</code>).</p>
+  <CodeBlock samples={[
+    s("print", `$ ztna metrics print | head -8
+<span class="tok-c"># HELP ztna_peer_count Peers currently reachable
+# TYPE ztna_peer_count gauge
+ztna_peer_count{path="direct"} 48
+ztna_peer_count{path="derp"} 2
+# HELP ztna_tx_bytes_total Bytes transmitted through the tunnel
+# TYPE ztna_tx_bytes_total counter
+ztna_tx_bytes_total 248329142
+...</span>`),
+    s("write (cron/node_exporter)", `$ ztna metrics write /var/lib/node_exporter/textfile_collector/ztna.prom`),
+  ]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="version-update">Version & updates</h2>
+
+  <h3 id="version">ztna version</h3>
+  <CodeBlock samples={[s("Command", `$ ztna version
+<span class="tok-c">QuickZTNA v3.2.0
+Build:    2026-04-12T09:18:44Z
+Commit:   a4b8e2c
+OS/arch:  linux/amd64
+Go:       1.24.2</span>`)]} />
+
+  <h3 id="update">ztna update</h3>
+  <p>Check for and apply client updates. Atomic apply: downloads to temp, verifies checksum, swaps binary, restarts service.</p>
+  <div class="params-table">
+    <ParamRow name="--check" type="bool" desc="Check only, don't download." />
+    <ParamRow name="--json" type="bool" desc="Machine-parseable output." />
+    <ParamRow name="--yes" type="bool" desc="Skip confirmation." />
+  </div>
+  <CodeBlock samples={[
+    s("Check", `$ ztna update --check
+<span class="tok-c">Current: v3.2.0
+Latest:  v3.2.1 (released 2 days ago)
+Update?  Run \`ztna update\` to apply.</span>`),
+    s("Apply", `$ ztna update --yes
+<span class="tok-c">→ Downloading v3.2.1 from releases.quickztna.com
+→ SHA-256 checksum verified
+→ Installing to /usr/local/bin/ztna.new
+→ Restarting service
+✓ Upgraded to v3.2.1</span>`),
+  ]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="profiles">Profiles & multi-org</h2>
+
+  <h3 id="switch">ztna switch</h3>
+  <p>Switch between orgs or saved profiles without logging out. Interactive picker if no argument is given.</p>
+  <div class="params-table">
+    <ParamRow name="[name]" type="arg" desc="Org slug or profile name. Omit for interactive picker." />
+    <ParamRow name="--list" type="bool" desc="List available orgs or profiles." />
+    <ParamRow name="--profile" type="bool" desc="Treat name as a profile rather than an org slug." />
+  </div>
+  <CodeBlock samples={[
+    s("List orgs", `$ ztna switch --list
+<span class="tok-c">ORGS  (* = current)
+  * acme        org_9fX2kR    acme.zt.net
+    personal    org_3mN7p     personal.zt.net
+    consulting  org_8Jk2w     consulting.zt.net</span>`),
+    s("Switch", `$ ztna switch personal
+<span class="tok-c">✓ Switched to org personal (personal.zt.net)
+✓ Tailnet IP: 100.90.2.4</span>`),
+  ]} />
+
+  <h3 id="profile">ztna profile list / create / delete</h3>
+  <p>Profiles are saved connection configs — useful if you connect to multiple self-hosted QuickZTNA instances.</p>
+  <CodeBlock samples={[
+    s("list", `$ ztna profile list
+<span class="tok-c">NAME        ORG_ID       API URL                          ACTIVE
+prod        org_9fX2kR   https://login.quickztna.com       *
+staging     org_5tH1r    https://staging.login.quickztna…
+self-host   —            https://zt.internal.acme.corp</span>`),
+    s("create", `$ ztna profile create self-host --api-url https://zt.internal.acme.corp
+<span class="tok-c">✓ Profile self-host created · run \`ztna switch --profile self-host\` to use</span>`),
+    s("delete", `$ ztna profile delete staging
+<span class="tok-c">✓ Profile staging removed</span>`),
+  ]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="system">System integration</h2>
+
+  <h3 id="install">ztna install / uninstall</h3>
+  <p>Install or remove <code>ztna</code> as a system service: systemd on Linux, launchd on macOS, Windows service on Windows.</p>
+  <div class="params-table">
+    <ParamRow name="--force" type="bool" desc="Overwrite existing service files (install only)." />
+  </div>
+  <CodeBlock samples={[
+    s("Linux (systemd)", `$ sudo ztna install
+<span class="tok-c">→ Writing /etc/systemd/system/quickztna-svc.service
+→ systemctl daemon-reload
+→ systemctl enable --now quickztna-svc
+✓ quickztna-svc is active (running)</span>`),
+    s("macOS (launchd)", `$ ztna install
+<span class="tok-c">→ Writing ~/Library/LaunchAgents/com.quickztna.daemon.plist
+→ launchctl load
+✓ com.quickztna.daemon started</span>`),
+    s("Windows (sc.exe via wrapper)", `PS&gt; ztna install
+<span class="tok-c">→ Installing quickztna-svc.exe as Windows service
+→ Starting service
+✓ QuickZTNA service is running (automatic)</span>`),
+    s("uninstall", `$ sudo ztna uninstall
+<span class="tok-c">→ Stopping service
+→ Removing unit file
+✓ Service removed (config and state preserved in ~/.config/ztna)</span>`),
+  ]} />
+  <Callout type="info" title="configure install-service / configure remove-service">
+    Legacy aliases for <code>ztna install</code> and <code>ztna uninstall</code> that still work — documented separately in the Go source for backward compatibility with older install scripts. Prefer the shorter forms.
+  </Callout>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="misc">Shell & misc</h2>
+
+  <h3 id="completion">ztna completion</h3>
+  <p>Generate shell completion scripts for bash, zsh, fish, or PowerShell.</p>
+  <CodeBlock samples={[
+    s("bash", `$ ztna completion bash &gt; /etc/bash_completion.d/ztna`),
+    s("zsh", `$ ztna completion zsh &gt; "\${fpath[1]}/_ztna"`),
+    s("fish", `$ ztna completion fish &gt; ~/.config/fish/completions/ztna.fish`),
+    s("powershell", `PS&gt; ztna completion powershell | Out-String | Invoke-Expression`),
+  ]} />
+
+  <h3 id="wg-config">ztna wg-config export</h3>
+  <p>Export raw WireGuard config — for debugging, or if you want to configure WireGuard manually on a gateway device.</p>
+  <div class="params-table">
+    <ParamRow name="--machine" type="string" desc="Machine ID. Defaults to this machine." />
+    <ParamRow name="--json" type="bool" desc="Return JSON with metadata instead of raw <code>wg0.conf</code>." />
+  </div>
+  <CodeBlock samples={[s("Command", `$ ztna wg-config export
+<span class="tok-c">[Interface]
+PrivateKey = SF8z...
+Address = 100.64.1.42/10
+DNS = 100.100.100.100
+MTU = 1280
+
+[Peer]
+PublicKey = K9xqP...
+PresharedKey = 2bN4r...   # derived from ML-KEM-768 + X25519 hybrid
+Endpoint = 52.34.12.88:41824
+AllowedIPs = 100.64.1.12/32
+PersistentKeepalive = 25
+...</span>`)]} />
+
+  <h3 id="licenses">ztna licenses</h3>
+  <p>Print open source license information.</p>
+  <CodeBlock samples={[s("Command", `$ ztna licenses
+<span class="tok-c">QuickZTNA uses the following open-source components.
+Full text: https://quickztna.com/licenses</span>`)]} />
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="exit-codes">Exit codes</h2>
+  <p>All commands follow the same convention:</p>
+  <ul>
+    <li><code>0</code> — success</li>
+    <li><code>1</code> — error (Cobra's default; prints error message to stderr)</li>
+    <li><code>130</code> — interrupted (Ctrl+C)</li>
+  </ul>
+
+  <h2 id="summary">Summary</h2>
+  <p>
+    <strong>39 primary commands</strong> across 14 categories. All are implemented in the current release.
+    4 commands are hidden from <code>-h</code> (<code>route approve/reject</code>, <code>route approve-exit-node/reject-exit-node</code>)
+    — still callable, but admin-only on the backend.
+    1 command is a thin stub (<code>licenses</code> — redirects to the website).
+    Everything else is full-featured with proper error handling, JSON output, and multi-platform support (Linux, macOS, Windows; amd64 and arm64).
+  </p>
+</DocsLayout>

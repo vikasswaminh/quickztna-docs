@@ -1,0 +1,95 @@
+---
+// Shared client-side behaviors: code block language tabs, copy button, param-row expand.
+---
+<script is:inline>
+  // ---- Language tab switching (with sync across all blocks) ----
+  document.querySelectorAll("[data-codeblock]").forEach((block) => {
+    const tabs = block.querySelectorAll(".lang-tab");
+    const pres = block.querySelectorAll(".code-body pre");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const lang = tab.dataset.lang;
+        tabs.forEach((t) => t.classList.toggle("active", t.dataset.lang === lang));
+        pres.forEach((p) => {
+          p.style.display = p.dataset.lang === lang ? "" : "none";
+        });
+        // Sync across all code blocks on the page
+        window.dispatchEvent(new CustomEvent("qz-lang", { detail: lang }));
+      });
+    });
+  });
+
+  window.addEventListener("qz-lang", (e) => {
+    const lang = e.detail;
+    document.querySelectorAll("[data-codeblock]").forEach((block) => {
+      const tabs = block.querySelectorAll(".lang-tab");
+      const pres = block.querySelectorAll(".code-body pre");
+      const hasLang = Array.from(tabs).some((t) => t.dataset.lang === lang);
+      if (!hasLang) return;
+      tabs.forEach((t) => t.classList.toggle("active", t.dataset.lang === lang));
+      pres.forEach((p) => {
+        p.style.display = p.dataset.lang === lang ? "" : "none";
+      });
+    });
+  });
+
+  // ---- Copy buttons ----
+  document.querySelectorAll("[data-copy-btn]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const block = btn.closest("[data-codeblock]");
+      if (!block) return;
+      const activePre = Array.from(block.querySelectorAll(".code-body pre")).find(
+        (p) => p.style.display !== "none"
+      );
+      if (!activePre) return;
+      const text = activePre.innerText;
+      navigator.clipboard?.writeText(text);
+      const copyIcon = btn.querySelector("[data-copy-icon]");
+      const checkIcon = btn.querySelector("[data-check-icon]");
+      if (copyIcon && checkIcon) {
+        copyIcon.style.display = "none";
+        checkIcon.style.display = "";
+        setTimeout(() => {
+          copyIcon.style.display = "";
+          checkIcon.style.display = "none";
+        }, 1300);
+      }
+    });
+  });
+
+  // ---- Param row expand ----
+  document.querySelectorAll("[data-param-row].has-children").forEach((row) => {
+    const btn = row.querySelector("[data-expand-btn]");
+    const txt = row.querySelector("[data-expand-text]");
+    btn?.addEventListener("click", () => {
+      row.classList.toggle("expanded");
+      if (txt) txt.textContent = row.classList.contains("expanded") ? "Hide child attributes" : "Show child attributes";
+    });
+  });
+
+  // ---- Response status selector ----
+  document.querySelectorAll("[data-resp-selector]").forEach((sel) => {
+    const opts = sel.querySelectorAll(".resp-opt");
+    const container = sel.closest("[data-resp-container]");
+    const blocks = container?.querySelectorAll("[data-resp-status]") || [];
+    opts.forEach((opt) => {
+      opt.addEventListener("click", () => {
+        const status = opt.dataset.status;
+        opts.forEach((o) => o.classList.toggle("active", o.dataset.status === status));
+        blocks.forEach((b) => {
+          b.style.display = b.dataset.respStatus === status ? "" : "none";
+        });
+      });
+    });
+  });
+
+  // ---- Feedback buttons ----
+  document.querySelectorAll("[data-feedback-btn]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("[data-feedback-btn]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const msg = document.querySelector("[data-feedback-msg]");
+      if (msg) msg.style.display = "";
+    });
+  });
+</script>

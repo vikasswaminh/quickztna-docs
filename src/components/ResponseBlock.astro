@@ -1,0 +1,20 @@
+---
+interface Props {
+  status: string;
+  body: string; // raw HTML with tok-* spans
+  latency?: string;
+}
+const { status, body, latency = "142ms" } = Astro.props;
+---
+<div class="code-block response-block">
+  <div class="code-header">
+    <div class="response-status">
+      <span class="status-dot ok"></span>
+      <span>{status}</span>
+      <span style="color:#52525B; margin-left:8px;">Response · {latency}</span>
+    </div>
+  </div>
+  <div class="code-body">
+    <pre><code set:html={body} /></pre>
+  </div>
+</div>

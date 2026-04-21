@@ -1,0 +1,216 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import Callout from "@/components/Callout.astro";
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Guide · Installing the agent · QuickZTNA"
+  description="Install the ztna agent on Linux, macOS, Windows. MDM / Intune / Jamf / cloud-init / Ansible patterns. Offline install, manual binary install."
+  current="index"
+  activeHref="/guide/install"
+  prev={{ href: "/guide/auth-keys", label: "Issuing auth keys" }}
+  next={{ href: "/guide/approve-devices", label: "Approving devices" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>User guide</div>
+  <h1>Installing the agent</h1>
+  <p class="lead">
+    One binary (<code>ztna</code>), one install command per platform. The installer
+    detects OS and architecture, downloads the correct build, installs as a system
+    service, and (if <code>ZTNA_AUTH_KEY</code> is set) auto-registers.
+  </p>
+
+  <h2 id="quick">Quick install</h2>
+  <CodeBlock samples={[
+    s("Linux / macOS", `$ curl -fsSL https://login.quickztna.com/install.sh | sh
+
+<span class="tok-c"># With auth key (headless fleet rollout):
+$ curl -fsSL https://login.quickztna.com/install.sh | ZTNA_AUTH_KEY=tskey-auth-xxx sh</span>`),
+    s("Windows (PowerShell admin)", `PS&gt; irm https://login.quickztna.com/install.ps1 | iex
+
+<span class="tok-c"># With auth key:
+PS&gt; $env:ZTNA_AUTH_KEY="tskey-auth-xxx"
+PS&gt; irm https://login.quickztna.com/install.ps1 | iex</span>`),
+  ]} />
+
+  <h2 id="what-installer-does">What the installer does</h2>
+  <ol>
+    <li>Detects OS (<code>linux</code>, <code>darwin</code>, <code>windows</code>) and architecture (<code>amd64</code>, <code>arm64</code>).</li>
+    <li>Queries <code>/api/client-version</code> with <code>action: "check"</code> and your <code>platform</code> to get the latest release URL.</li>
+    <li>Downloads the binary from <code>/api/releases/*</code> over HTTPS.</li>
+    <li>Verifies the SHA-256 checksum against the release manifest.</li>
+    <li>Installs to <code>/usr/local/bin/ztna</code> (Linux/macOS) or <code>C:\\Program Files\\QuickZTNA\\ztna.exe</code> (Windows).</li>
+    <li>Installs + starts a system service: systemd on Linux, launchd on macOS, Windows service on Windows.</li>
+    <li>If <code>ZTNA_AUTH_KEY</code> is set: runs <code>ztna login --auth-key</code> + <code>ztna up</code>.</li>
+  </ol>
+
+  <h2 id="platform-requirements">Platform requirements</h2>
+  <div class="params-table">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Linux</span><span class="param-type">kernel 5.6+</span></div>
+      <p class="param-desc">WireGuard kernel module (built into mainline 5.6+, or <code>wireguard-dkms</code>). Falls back to userspace (<code>wireguard-go</code>) if kernel module missing.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">macOS</span><span class="param-type">13+</span></div>
+      <p class="param-desc">Uses userspace WireGuard (utun device). Requires admin password for network extension on first install.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Windows</span><span class="param-type">10+, Server 2019+</span></div>
+      <p class="param-desc">Uses Wintun driver (installed automatically). Requires admin privileges for install only; daily operation needs no admin.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">CPU</span><span class="param-type">amd64 / arm64</span></div>
+      <p class="param-desc">ARM supported: Apple Silicon (M1/M2/M3), Graviton, Raspberry Pi 4/5 (64-bit OS).</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Network</span><span class="param-type">outbound</span></div>
+      <p class="param-desc">HTTPS 443 to <code>login.quickztna.com</code>, UDP 3478 (STUN), WSS 443 (DERP). Inbound is not required.</p>
+    </div>
+  </div>
+
+  <h2 id="mdm">MDM rollout — Intune, Jamf, Kandji</h2>
+  <p>Most MDMs can push a shell or PowerShell script. The installer is idempotent — running it twice is safe.</p>
+
+  <h3>Microsoft Intune (Windows + macOS)</h3>
+  <ol>
+    <li><strong>Devices → Configuration → Scripts and remediations → Add</strong></li>
+    <li>Platform: macOS or Windows</li>
+    <li>Script content:
+      <CodeBlock samples={[s("Windows", `$env:ZTNA_AUTH_KEY = "tskey-auth-xxx"
+irm https://login.quickztna.com/install.ps1 | iex`), s("macOS", `#!/bin/bash
+export ZTNA_AUTH_KEY=tskey-auth-xxx
+curl -fsSL https://login.quickztna.com/install.sh | sh`)]} />
+    </li>
+    <li>Assignment: your target device group</li>
+    <li>Set execution frequency: once (or weekly for auto-healing)</li>
+  </ol>
+
+  <h3>Jamf (macOS)</h3>
+  <p>Create a policy with a shell script payload. Scope to devices or a Smart Group. Trigger on enrolment.</p>
+
+  <h3>Kandji / Workspace One</h3>
+  <p>Use a Custom App or Automated App with the install script above. Pass the auth key as a secret variable.</p>
+
+  <h2 id="ansible">Ansible playbook</h2>
+  <CodeBlock samples={[s("YAML", `- name: Install QuickZTNA on Linux + macOS
+  hosts: all
+  become: true
+  vars:
+    ztna_auth_key: "{{ lookup('env', 'ZTNA_KEY') }}"
+  tasks:
+    - name: Run installer
+      shell: |
+        curl -fsSL https://login.quickztna.com/install.sh | ZTNA_AUTH_KEY={{ ztna_auth_key }} sh
+      environment:
+        ZTNA_AUTH_KEY: "{{ ztna_auth_key }}"
+      args:
+        creates: /usr/local/bin/ztna
+
+    - name: Verify connection
+      command: ztna status --json
+      register: ztna_status
+
+    - name: Report tailnet IP
+      debug:
+        msg: "{{ (ztna_status.stdout | from_json).tailnet_ip }}"`)]} />
+
+  <h2 id="cloud-init">cloud-init (AWS, GCP, DigitalOcean)</h2>
+  <CodeBlock samples={[s("user-data.yaml", `#cloud-config
+write_files:
+  - path: /etc/environment
+    append: true
+    content: "ZTNA_AUTH_KEY=tskey-auth-xxx\\n"
+
+runcmd:
+  - curl -fsSL https://login.quickztna.com/install.sh | ZTNA_AUTH_KEY=tskey-auth-xxx sh
+  - ztna set --advertise-tags tag:server,tag:prod`)]} />
+  <p>For Terraform providers that accept user_data (AWS EC2, GCP Compute Engine, DigitalOcean Droplets), render the cloud-init above via a template_file data source.</p>
+
+  <h2 id="docker">Docker / Kubernetes</h2>
+  <p>Run the agent in userspace mode — no TUN device, no privileged container, no host-network dependency.</p>
+  <CodeBlock samples={[s("Dockerfile", `FROM ubuntu:24.04
+
+ARG ZTNA_AUTH_KEY
+RUN apt-get update && apt-get install -y curl && \\
+    curl -fsSL https://login.quickztna.com/install.sh | ZTNA_AUTH_KEY=$ZTNA_AUTH_KEY sh
+
+ENTRYPOINT ["ztna", "up", "--userspace"]`), s("Kubernetes", `apiVersion: v1
+kind: Secret
+metadata:
+  name: ztna-auth-key
+type: Opaque
+stringData:
+  key: tskey-auth-xxx
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ztna-sidecar
+spec:
+  template:
+    spec:
+      containers:
+      - name: ztna
+        image: myorg/app-with-ztna:latest
+        env:
+        - name: ZTNA_AUTH_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ztna-auth-key
+              key: key`)]} />
+
+  <h2 id="manual">Manual binary install (offline / air-gapped)</h2>
+  <ol>
+    <li>Download the binary from <a href="https://login.quickztna.com/download">login.quickztna.com/download</a> on an internet-connected machine.</li>
+    <li>Verify the SHA-256 checksum from the same page.</li>
+    <li>Copy to the target device + <code>chmod +x</code>.</li>
+    <li>Move to <code>/usr/local/bin/ztna</code> or equivalent.</li>
+    <li><code>sudo ztna install</code> — sets up the service.</li>
+    <li><code>sudo ztna up --auth-key ...</code> — registers + connects.</li>
+  </ol>
+  <Callout type="info" title="Air-gapped control plane">
+    Air-gapped environments need the full QuickZTNA stack deployed on-prem, not just the agent. Contact sales@quickztna.com for the self-hosted deployment guide.
+  </Callout>
+
+  <h2 id="uninstall">Uninstall</h2>
+  <CodeBlock samples={[
+    s("Linux", `$ sudo ztna uninstall
+<span class="tok-c">→ Stopping service
+→ Removing /etc/systemd/system/quickztna-svc.service
+✓ Service removed · config preserved in ~/.config/ztna/
+# To fully purge: sudo rm -rf /usr/local/bin/ztna ~/.config/ztna</span>`),
+    s("macOS", `$ ztna uninstall`),
+    s("Windows", `PS&gt; ztna uninstall`),
+  ]} />
+
+  <h2 id="troubleshoot">Troubleshooting</h2>
+  <div class="params-table">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Installer hangs on download</span></div>
+      <p class="param-desc">Outbound HTTPS 443 to <code>login.quickztna.com</code> blocked. Add firewall exception.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">"Operation not permitted" (Linux)</span></div>
+      <p class="param-desc">Run with sudo. The installer needs root to install the systemd unit.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">macOS network extension blocked</span></div>
+      <p class="param-desc">System Settings → Privacy &amp; Security → Allow QuickZTNA. Then re-run <code>ztna up</code>.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Wintun driver install failed</span></div>
+      <p class="param-desc">Run PowerShell as admin. Uninstall existing Wintun. Re-run installer.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">"Auth key expired"</span></div>
+      <p class="param-desc">Issue a new one from the dashboard and re-run with the new key.</p>
+    </div>
+  </div>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/cli#up">CLI: ztna up</a> — every flag the agent accepts</li>
+    <li><a href="/guide/auth-keys">Issuing auth keys</a> — what to create before rolling out</li>
+    <li><a href="/architecture#agent">Architecture: Go agent</a> — what's actually running on each device</li>
+  </ul>
+</DocsLayout>

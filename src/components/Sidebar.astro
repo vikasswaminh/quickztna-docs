@@ -1,0 +1,208 @@
+---
+interface Props {
+  variant?: "default" | "api";
+  activeHref?: string;
+}
+const { variant = "default", activeHref = "" } = Astro.props;
+
+const DEFAULT_NAV = [
+  {
+    title: "Get started",
+    items: [
+      { href: "/", label: "Introduction" },
+      { href: "/quickstart", label: "Quickstart", badge: "2 min" },
+      { href: "/concepts", label: "Core concepts" },
+      { href: "/architecture", label: "Architecture overview" },
+      { href: "/security", label: "PQC & threat model", badge: "New" },
+    ],
+  },
+  {
+    title: "User guide",
+    items: [
+      { href: "/guide/auth-keys", label: "Issue an auth key" },
+      { href: "/guide/install", label: "Install the agent" },
+      { href: "/guide/approve-devices", label: "Approve + manage devices" },
+      { href: "/guide/acl-policies", label: "Write ACL policies" },
+      { href: "/guide/posture", label: "Require device posture" },
+      { href: "/guide/sso", label: "Configure SSO + SCIM" },
+    ],
+  },
+  {
+    title: "CLI — ztna",
+    items: [
+      { href: "/cli", label: "Overview + env vars" },
+      { href: "/cli#login", label: "login / logout" },
+      { href: "/cli#up", label: "up / down" },
+      { href: "/cli#status-cmd", label: "status / peers / ip / whois" },
+      { href: "/cli#machines-list", label: "machines list" },
+      { href: "/cli#auth-keys-list", label: "auth-keys list" },
+      { href: "/cli#ping", label: "ping / nc / ssh" },
+      { href: "/cli#dns-query", label: "dns query / status" },
+      { href: "/cli#set", label: "set (dynamic config)" },
+      { href: "/cli#route", label: "route list" },
+      { href: "/cli#route-admin", label: "route approve / reject" },
+      { href: "/cli#exit-node", label: "exit-node list / suggest" },
+      { href: "/cli#split-tunnel", label: "split-tunnel list" },
+      { href: "/cli#cert", label: "cert (TLS)" },
+      { href: "/cli#secrets", label: "secrets (vault)" },
+      { href: "/cli#acl-list", label: "acl list / test" },
+      { href: "/cli#posture-status", label: "posture status" },
+      { href: "/cli#threat", label: "threat check" },
+      { href: "/cli#audit", label: "audit list" },
+      { href: "/cli#compliance", label: "compliance report" },
+      { href: "/cli#netcheck", label: "netcheck" },
+      { href: "/cli#debug", label: "debug (goroutines/derp/metrics)" },
+      { href: "/cli#log", label: "log" },
+      { href: "/cli#bugreport", label: "bugreport" },
+      { href: "/cli#metrics", label: "metrics print / write" },
+      { href: "/cli#version", label: "version" },
+      { href: "/cli#update", label: "update" },
+      { href: "/cli#switch", label: "switch (multi-org)" },
+      { href: "/cli#profile", label: "profile list / create / delete" },
+      { href: "/cli#install", label: "install / uninstall" },
+      { href: "/cli#completion", label: "completion (bash/zsh/fish)" },
+      { href: "/cli#wg-config", label: "wg-config export" },
+    ],
+  },
+  {
+    title: "API reference",
+    items: [
+      { href: "/api", label: "Overview" },
+      { href: "/api#authentication", label: "Authentication" },
+      { href: "/api#errors", label: "Errors" },
+      { href: "/api#rate-limits", label: "Rate limits" },
+      { href: "/api#realtime", label: "WebSocket realtime" },
+    ],
+  },
+  {
+    title: "Platform",
+    items: [
+      { href: "/features", label: "Features by plan" },
+      { href: "/pricing", label: "Pricing" },
+      { href: "/architecture", label: "Architecture" },
+      { href: "/security", label: "Security" },
+    ],
+  },
+  {
+    title: "Resources",
+    items: [
+      { href: "https://quickztna.com/changelog", label: "Changelog", external: true },
+      { href: "https://login.quickztna.com/download", label: "Download agent", external: true },
+      { href: "/glossary", label: "Glossary" },
+      { href: "mailto:support@quickztna.com", label: "Contact support", external: true },
+    ],
+  },
+];
+
+const API_NAV = [
+  {
+    title: "Overview",
+    items: [
+      { href: "/api#overview", label: "Introduction", active: true },
+      { href: "/api#authentication", label: "Authentication" },
+      { href: "/api#errors", label: "Errors" },
+      { href: "/api#pagination", label: "Pagination" },
+      { href: "/api#rate-limits", label: "Rate limits" },
+      { href: "/api#realtime", label: "WebSocket realtime" },
+    ],
+  },
+  {
+    title: "Auth & identity",
+    items: [
+      { href: "/api#auth-signup", label: "Signup", method: "POST" },
+      { href: "/api#auth-login", label: "Login", method: "POST" },
+      { href: "/api#auth-refresh", label: "Refresh token", method: "POST" },
+      { href: "/api#auth-me", label: "Current user", method: "GET" },
+      { href: "/api#auth-mfa-setup", label: "Setup MFA", method: "POST" },
+      { href: "/api#scim", label: "SCIM 2.0", method: "POST" },
+    ],
+  },
+  {
+    title: "Machines",
+    items: [
+      { href: "/api#register-machine", label: "Register machine", method: "POST" },
+      { href: "/api#heartbeat", label: "Heartbeat", method: "POST" },
+      { href: "/api#machine-approve", label: "Approve", method: "POST" },
+      { href: "/api#machine-rename", label: "Rename", method: "POST" },
+      { href: "/api#machine-quarantine", label: "Quarantine", method: "POST" },
+      { href: "/api#machine-wipe", label: "Wipe device", method: "POST" },
+    ],
+  },
+  {
+    title: "Auth keys & API keys",
+    items: [
+      { href: "/api#create-auth-key", label: "Create auth key", method: "POST" },
+      { href: "/api#revoke-auth-key", label: "Revoke auth key", method: "POST" },
+      { href: "/api#create-api-key", label: "Create API key", method: "POST" },
+      { href: "/api#rotate-api-key", label: "Rotate API key", method: "POST" },
+    ],
+  },
+  {
+    title: "Policies (ACL)",
+    items: [
+      { href: "/api#acl-evaluate", label: "Evaluate ACL", method: "POST" },
+      { href: "/api#dns-management", label: "DNS settings", method: "POST" },
+      { href: "/api#dns-filter", label: "DNS filter", method: "POST" },
+      { href: "/api#governance", label: "JIT grants", method: "POST" },
+    ],
+  },
+  {
+    title: "AI & insights",
+    items: [
+      { href: "/api#ai-chat", label: "AI chat", method: "POST" },
+      { href: "/api#ai-generate-acl", label: "Generate ACL", method: "POST" },
+      { href: "/api#ai-summarize", label: "Summarize events", method: "POST" },
+      { href: "/api#admin-insights", label: "Admin insights", method: "POST" },
+    ],
+  },
+  {
+    title: "Realtime",
+    items: [
+      { href: "/api#ws-realtime", label: "WebSocket", method: "GET" },
+      { href: "/api#ws-broadcast", label: "Server broadcast", method: "POST" },
+    ],
+  },
+  {
+    title: "Platform admin",
+    items: [
+      { href: "/api#feature-check", label: "Feature check", method: "POST" },
+      { href: "/api#platform-admin", label: "Platform admin", method: "POST" },
+      { href: "/api#health", label: "Health", method: "GET" },
+    ],
+  },
+];
+
+const nav = variant === "api" ? API_NAV : DEFAULT_NAV;
+const METHOD_CLS: Record<string, string> = {
+  GET: "method-get", POST: "method-post", PUT: "method-put", DEL: "method-del",
+};
+---
+<aside class="sidebar">
+  {nav.map((sec) => (
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">{sec.title}</div>
+      {sec.items.map((it: any) => {
+        const isActive = it.active || it.href === activeHref;
+        return (
+          <a
+            href={it.href}
+            target={it.external ? "_blank" : undefined}
+            rel={it.external ? "noopener noreferrer" : undefined}
+            class:list={["sidebar-link", isActive && "active"]}
+          >
+            {it.method && (
+              <span class:list={["sidebar-link-method", METHOD_CLS[it.method]]}>{it.method}</span>
+            )}
+            <span style="flex:1">{it.label}</span>
+            {it.badge && (
+              <span style="font-size:10px; padding:1px 5px; background:var(--brand-light); color:var(--brand); border-radius:3px; font-weight:500;">{it.badge}</span>
+            )}
+            {it.external && (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg>
+            )}
+          </a>
+        );
+      })}
+    </div>
+  ))}
+</aside>

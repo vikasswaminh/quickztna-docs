@@ -1,0 +1,151 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import Callout from "@/components/Callout.astro";
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Guide · Device posture · QuickZTNA"
+  description="Require disk encryption, OS version, firewall, antivirus. Auto-quarantine non-compliant devices. Posture policies + remediation workflow."
+  current="index"
+  activeHref="/guide/posture"
+  prev={{ href: "/guide/acl-policies", label: "ACL policies" }}
+  next={{ href: "/guide/sso", label: "Configure SSO" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>User guide</div>
+  <h1>Device posture policies</h1>
+  <p class="lead">
+    Posture policies enforce device-health requirements before a machine can
+    access tagged resources. Out-of-compliance devices are auto-quarantined.
+    This guide covers what signals are collected, how to write a policy, and
+    how the remediation flow works.
+  </p>
+
+  <h2 id="signals">Signals collected</h2>
+  <p>The <code>ztna</code> agent reports these on every heartbeat (every 60 seconds):</p>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">os_version</span><span class="param-type">string</span></div><p class="param-desc">E.g. <code>Ubuntu 24.04.1 LTS</code>, <code>macOS 14.4.1</code>, <code>Windows 11 23H2</code>.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">disk_encryption</span><span class="param-type">bool</span></div><p class="param-desc">LUKS2 (Linux), FileVault (macOS), BitLocker (Windows). Active state.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">firewall</span><span class="param-type">bool / string</span></div><p class="param-desc">ufw, iptables, pf, Windows Firewall — any active host firewall.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">antivirus</span><span class="param-type">bool / string</span></div><p class="param-desc">clamav, XProtect, Defender, third-party AV. Active service required.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">screen_lock</span><span class="param-type">bool + interval</span></div><p class="param-desc">Auto-lock enabled + maximum idle minutes.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">auto_update</span><span class="param-type">bool</span></div><p class="param-desc">OS auto-update enabled.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">agent_version</span><span class="param-type">semver</span></div><p class="param-desc">Version of the <code>ztna</code> binary running.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">custom_attributes</span><span class="param-type">map</span></div><p class="param-desc">Custom signals from external-posture integrations (Crowdstrike, SentinelOne).</p></div>
+  </div>
+
+  <h2 id="policy">Writing a posture policy</h2>
+  <p>A policy is a named set of required signal values. Machines matching the policy's <code>scope</code> (by tag or group) must pass every requirement to be marked <code>compliant</code>.</p>
+  <CodeBlock samples={[s("JSON", `{
+  <span class="tok-p">"name"</span>: <span class="tok-s">"strict-prod"</span>,
+  <span class="tok-p">"scope"</span>: {
+    <span class="tok-p">"tags"</span>: [<span class="tok-s">"tag:prod"</span>, <span class="tok-s">"tag:engineer"</span>]
+  },
+  <span class="tok-p">"requirements"</span>: {
+    <span class="tok-p">"os_version_min"</span>: {
+      <span class="tok-p">"linux"</span>:   <span class="tok-s">"22.04"</span>,
+      <span class="tok-p">"darwin"</span>:  <span class="tok-s">"13.0"</span>,
+      <span class="tok-p">"windows"</span>: <span class="tok-s">"10.0.19041"</span>
+    },
+    <span class="tok-p">"disk_encryption"</span>: <span class="tok-k">true</span>,
+    <span class="tok-p">"firewall"</span>: <span class="tok-k">true</span>,
+    <span class="tok-p">"screen_lock"</span>: { <span class="tok-p">"enabled"</span>: <span class="tok-k">true</span>, <span class="tok-p">"max_idle_min"</span>: <span class="tok-n">10</span> },
+    <span class="tok-p">"agent_version_min"</span>: <span class="tok-s">"3.2.0"</span>
+  },
+  <span class="tok-p">"on_fail"</span>: <span class="tok-s">"quarantine"</span>,
+  <span class="tok-p">"grace_period_min"</span>: <span class="tok-n">30</span>
+}`)]} />
+
+  <h2 id="enforcement">Enforcement</h2>
+  <p>After every heartbeat, the backend evaluates the device against any matching policies.</p>
+  <ul>
+    <li><strong>Compliant</strong> — all requirements pass. Machine is <code>online</code>, normal ACL eval applies.</li>
+    <li><strong>Non-compliant + grace period active</strong> — user is warned via dashboard + agent notification, but still connected.</li>
+    <li><strong>Non-compliant + grace expired</strong> — <code>on_fail</code> action applies.</li>
+  </ul>
+  <p><code>on_fail</code> options:</p>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">warn</span></div><p class="param-desc">Notify admin + user. No enforcement change.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">restrict</span></div><p class="param-desc">Deny connections to tagged resources; allow tailnet connectivity.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">quarantine</span></div><p class="param-desc">Full isolation. No connections in or out. Can be lifted by admin or remediation.</p></div>
+  </div>
+
+  <h2 id="apply">Applying a policy</h2>
+  <CodeBlock samples={[s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/db/posture_policies</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "rows": [{ <span class="tok-c">/* policy JSON */</span> }],
+      "org_id": "org_9fX2kR"
+    }'</span>`)]} />
+  <p>Or in the dashboard: <strong>Device Security → Posture Policies → New</strong>.</p>
+
+  <h2 id="check">Checking a device</h2>
+  <CodeBlock samples={[s("CLI (from the device)", `$ ztna posture status
+<span class="tok-c">Device Posture · laptop-alex
+─────────────────────────────
+OS Version:           Ubuntu 24.04.1 LTS     ✓ (required: 22.04+)
+Disk Encryption:      LUKS2 (active)         ✓
+Firewall:             ufw (enabled)          ✓
+Antivirus:            clamav (active)        ✓
+Screen Lock:          enabled (5min)         ✓
+Auto-Update:          enabled                ✓
+Agent version:        3.2.0                  ✓ (required: 3.2.0+)
+
+Server verdict: COMPLIANT — all checks pass
+Matched policy: strict-prod</span>`)]} />
+  <CodeBlock samples={[s("CLI (admin, any device)", `$ ztna machines list --filter posture=non_compliant
+<span class="tok-c">NAME              IP             VIOLATIONS                                 GRACE
+legacy-vm         100.64.1.55    os_version (20.04 &lt; 22.04), agent (3.0.1)  expired
+prototype-01      100.64.1.88    disk_encryption, screen_lock                 28 min left</span>`)]} />
+
+  <h2 id="remediation">Remediation flow</h2>
+  <p>When a policy fires:</p>
+  <ol>
+    <li>User sees in-dashboard notification + email with exact violations</li>
+    <li>Dashboard shows "Remediation steps" — <code>sudo ufw enable</code>, "enable FileVault in Settings", etc.</li>
+    <li>After remediation, user runs <code>ztna posture status</code> to self-verify</li>
+    <li>Next heartbeat (within 60s) reports fixed state — backend auto-unquarantines</li>
+  </ol>
+  <CodeBlock samples={[s("Self-remediation", `# User sees dashboard: "Your device is quarantined because disk encryption is disabled."
+
+$ sudo fdesetup enable     # macOS — enable FileVault
+# (reboot, enter password)
+
+$ ztna posture status
+<span class="tok-c">Disk Encryption:  FileVault (active)  ✓
+Server verdict: COMPLIANT</span>
+
+# User is automatically unquarantined at next heartbeat</span>`)]} />
+
+  <h2 id="external">External posture sources</h2>
+  <p>Pull signals from your existing EDR (Crowdstrike Falcon, SentinelOne) via <code>/api/external-posture</code>. The agent combines internal signals with external ones before the server evaluates.</p>
+  <CodeBlock samples={[s("Configure external source", `$ curl <span class="tok-u">https://login.quickztna.com/api/external-posture</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "configure_source",
+      "org_id": "org_9fX2kR",
+      "provider": "crowdstrike",
+      "api_client_id": "...",
+      "api_secret": "...",
+      "sync_interval_min": 15
+    }'</span>`)]} />
+
+  <h2 id="acl-integration">Using posture in ACL rules</h2>
+  <p>Combine posture with ACL for a belt-and-braces approach. <code>require_posture: true</code> in a rule means "source must be compliant before this rule matches":</p>
+  <CodeBlock samples={[s("JSON", `{
+  <span class="tok-p">"name"</span>: <span class="tok-s">"posture-gated-prod-access"</span>,
+  <span class="tok-p">"src"</span>: <span class="tok-s">"tag:engineer"</span>,
+  <span class="tok-p">"dst"</span>: <span class="tok-s">"tag:prod"</span>,
+  <span class="tok-p">"proto"</span>: <span class="tok-s">"tcp"</span>,
+  <span class="tok-p">"ports"</span>: <span class="tok-s">"22,443"</span>,
+  <span class="tok-p">"require_posture"</span>: <span class="tok-k">true</span>
+}`)]} />
+  <p>Even if the source machine isn't quarantined, an ACL rule with <code>require_posture</code> denies the connection if posture is failing. Gives layered defence.</p>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/guide/acl-policies">ACL policies</a> — combining posture + tags</li>
+    <li><a href="/guide/approve-devices">Quarantine + unquarantine</a> — the admin action behind auto-quarantine</li>
+    <li><a href="/cli#posture-status">CLI: ztna posture status</a> — what users see on their own device</li>
+  </ul>
+</DocsLayout>

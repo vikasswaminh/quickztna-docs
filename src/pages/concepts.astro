@@ -1,0 +1,193 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import Callout from "@/components/Callout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Core Concepts · QuickZTNA Docs"
+  description="The mental model for QuickZTNA — ZTNA vs VPN, ABAC, PQC, tailnet, MagicDNS, DERP, control plane vs data plane, tags, posture, JIT."
+  current="index"
+  activeHref="/concepts"
+  prev={{ href: "/quickstart", label: "Quickstart" }}
+  next={{ href: "/architecture", label: "Architecture" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Concepts</div>
+  <h1>Core concepts</h1>
+  <p class="lead">
+    The mental model you need to operate QuickZTNA confidently. If you've used
+    Tailscale or ZeroTier, most of this will feel familiar — with one twist:
+    every tunnel is post-quantum-encrypted by default.
+  </p>
+
+  <h2 id="ztna">ZTNA (Zero Trust Network Access)</h2>
+  <p>
+    Traditional VPNs treat "being on the network" as identity. Once you're connected,
+    you can reach anything on that network. ZTNA flips this: every connection is
+    verified against <strong>identity</strong> (who is the user?) and
+    <strong>policy</strong> (is this specific action allowed?) regardless of the
+    network path. No implicit trust from being inside a perimeter.
+  </p>
+  <p>
+    In QuickZTNA, "zero trust" is enforced on every packet via ACL rules that key on:
+  </p>
+  <ul>
+    <li><strong>User identity</strong> — who signed in (email, SSO claims, groups)</li>
+    <li><strong>Device posture</strong> — is the machine compliant (OS version, disk encryption, firewall)?</li>
+    <li><strong>Tags</strong> — what labels the source and destination machines carry (<code>tag:laptop</code>, <code>tag:prod</code>)</li>
+    <li><strong>Time + day</strong> — business hours only, weekends blocked, etc.</li>
+    <li><strong>Geo</strong> — source country, CIDR ranges</li>
+    <li><strong>Protocol + port</strong> — SSH yes, SMB no</li>
+  </ul>
+
+  <h2 id="pqc">PQC — Post-Quantum Cryptography</h2>
+  <p>
+    Classical Diffie-Hellman (including X25519, which WireGuard uses by default) is
+    vulnerable to a future sufficiently-large quantum computer. Attackers today can
+    <em>capture encrypted traffic and decrypt it later</em> — the
+    "harvest-now-decrypt-later" threat.
+  </p>
+  <p>
+    QuickZTNA defeats this by running a <strong>hybrid key exchange</strong> on every
+    tunnel: the classical X25519 ECDH AND NIST's ML-KEM-768 (FIPS 203) in parallel.
+    The pre-shared key injected into WireGuard is derived from both shared secrets:
+  </p>
+  <CodeBlock samples={[s("HKDF formula", `PSK = HKDF-SHA256(
+  X25519_shared || ML-KEM_shared,
+  info = "quickztna-pqc-wg-psk-v1"
+)`)]} />
+  <p>
+    If a quantum computer breaks X25519 tomorrow, the attacker still can't derive
+    the PSK without also breaking ML-KEM-768 — which the NIST PQC standardization
+    process concluded is quantum-resistant.
+  </p>
+  <Callout type="pqc" title="PQC is not a plan feature">
+    Every tunnel — on every plan, Free included — uses ML-KEM-768. There is no toggle. See <a href="/security#data-plane-wireguard--pqc">security reference</a> for the derivation details.
+  </Callout>
+
+  <h2 id="tailnet">Tailnet</h2>
+  <p>
+    Your <strong>tailnet</strong> is the private encrypted mesh of all machines in
+    your organization. It has its own IP space — usually <code>100.64.0.0/10</code>
+    (CGNAT range, so it doesn't conflict with RFC 1918 LAN ranges). Every machine
+    gets one tailnet IP at registration and keeps it until deletion.
+  </p>
+  <p>
+    Tailnets are per-org. Machine <code>A</code> in org <code>acme</code> cannot see
+    machine <code>A</code> in org <code>widgetco</code> even if they have the same
+    tailnet IP — they're on different meshes.
+  </p>
+
+  <h2 id="control-vs-data">Control plane vs data plane</h2>
+  <p>Two completely separate pipes:</p>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+      <h3 class="card-title">Control plane</h3>
+      <p class="card-desc">Dashboard + REST API. Issues identities, distributes policies, tracks machines. Sees metadata (who connected when, which peers) but never your data traffic.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg></div>
+      <h3 class="card-title">Data plane</h3>
+      <p class="card-desc">WireGuard peer-to-peer tunnels. Traffic goes directly device-to-device, end-to-end encrypted. Server never sees it. Uses DERP relays only when P2P is blocked.</p>
+    </div>
+  </div>
+  <p>
+    This split matters for privacy, compliance, and scalability. Traffic between
+    your laptop and your prod DB stays on your WireGuard tunnel — QuickZTNA's
+    servers literally can't read it.
+  </p>
+
+  <h2 id="magicdns">MagicDNS</h2>
+  <p>
+    Every machine in your tailnet is automatically reachable by name at
+    <code>&lt;hostname&gt;.&lt;org-slug&gt;.zt.net</code>. The agent runs a local
+    DNS stub that resolves these names to tailnet IPs without leaking queries to
+    external DNS.
+  </p>
+  <CodeBlock samples={[s("Resolution", `$ ztna dns query db-primary
+100.64.1.12 (db-primary.acme.zt.net)
+
+$ ssh db-primary
+# works — resolved via MagicDNS
+
+$ ping db-primary.acme.zt.net
+# also works — full MagicDNS name`)]} />
+
+  <h2 id="derp">DERP — when P2P fails</h2>
+  <p>
+    Ideally every peer reaches every other peer directly via WireGuard. But
+    symmetric NAT, CGNAT, and restrictive firewalls sometimes block that. When
+    direct UDP fails, the agent falls back to a <strong>DERP relay</strong>:
+    a WebSocket-over-TLS server that passes encrypted packets between peers.
+  </p>
+  <p>QuickZTNA runs 4 global DERP regions:</p>
+  <ul>
+    <li><strong>BLR</strong> — Bangalore, India (<code>139.59.26.108</code>)</li>
+    <li><strong>NYC</strong> — New York, US East (<code>142.93.7.116</code>)</li>
+    <li><strong>LON</strong> — London, Europe (<code>142.93.39.6</code>)</li>
+    <li><strong>SFO</strong> — San Francisco, US West (<code>137.184.190.98</code>)</li>
+  </ul>
+  <Callout type="info" title="DERP never decrypts traffic">
+    DERP relays are zero-knowledge — they see encrypted WireGuard packets but never the plaintext. The relay only knows "this packet goes from peer A to peer B"; it can't see either peer's identity or traffic content.
+  </Callout>
+
+  <h2 id="tags">Tags</h2>
+  <p>
+    Tags are arbitrary labels on machines — <code>tag:laptop</code>, <code>tag:prod</code>,
+    <code>tag:ci</code>, <code>tag:eng</code>. ACL rules frequently reference tags
+    instead of hostnames because tags scale: a rule like "engineers can SSH to
+    prod servers" is written once and applies to every tagged device.
+  </p>
+  <p>
+    Tags are applied at registration (<code>--advertise-tags tag:laptop,tag:eng</code>)
+    or later via <code>ztna set --tags</code>. Admins can also tag machines from
+    the dashboard.
+  </p>
+
+  <h2 id="posture">Device posture</h2>
+  <p>
+    Posture signals are health checks the agent reports on every heartbeat: OS
+    version, disk encryption, firewall status, screen lock, antivirus. Admins
+    define <strong>posture policies</strong> that decide whether a machine is
+    compliant.
+  </p>
+  <p>
+    Non-compliant machines can be <strong>quarantined</strong> automatically —
+    their tailnet IP is still allocated but ACL rules that require posture deny
+    all traffic. The user sees a clear message in the dashboard and the agent
+    logs, not silent drops.
+  </p>
+
+  <h2 id="jit">JIT access (Just-In-Time)</h2>
+  <p>
+    Instead of permanent access to sensitive resources, a user <strong>requests</strong>
+    a time-bounded grant (e.g. "SSH to prod-db for 1 hour"). An approver (from
+    a designated approver set) gets a notification; on approval the grant is
+    active for the window and auto-revokes at expiry.
+  </p>
+  <p>
+    Every JIT request, approval, and revocation is audit-logged. Reports can
+    be exported for SOC 2 evidence.
+  </p>
+
+  <h2 id="org-model">Organizations + roles</h2>
+  <p>Every resource is scoped to an <strong>org</strong> (tenant). Users can belong to multiple orgs. Within each org, roles are:</p>
+  <ul>
+    <li><strong>Owner</strong> — full control, including billing and deleting the org</li>
+    <li><strong>Admin</strong> — everything except billing and org deletion</li>
+    <li><strong>Member</strong> — can use the tailnet, view own resources, request JIT</li>
+  </ul>
+  <p>
+    Role is enforced at every write endpoint — <code>isOrgAdmin()</code> returns
+    <code>403 FORBIDDEN</code> for members trying admin actions.
+  </p>
+
+  <h2 id="next">Where to go next</h2>
+  <ul>
+    <li><a href="/architecture">Architecture</a> — how the pieces actually fit together at runtime</li>
+    <li><a href="/security">Security</a> — the full crypto story and threat model</li>
+    <li><a href="/glossary">Glossary</a> — definitions for everything on this page</li>
+  </ul>
+</DocsLayout>

@@ -1,0 +1,127 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import Callout from "@/components/Callout.astro";
+
+const cards = [
+  {
+    title: "Quickstart",
+    desc: "100 devices on an encrypted mesh in 2 minutes. Auth key → install command → done.",
+    href: "/quickstart",
+    icon: "zap",
+  },
+  {
+    title: "API Reference",
+    desc: "57 REST endpoints. Action-based dispatch, JWT + API key auth, examples in 6 languages.",
+    href: "/api",
+    icon: "code",
+  },
+  {
+    title: "CLI Reference",
+    desc: "The <code>ztna</code> command: login, up, down, status, peers, ping, netcheck, diag.",
+    href: "/cli",
+    icon: "terminal",
+  },
+  {
+    title: "Core concepts",
+    desc: "ZTNA, ABAC, PQC, DERP, WireGuard, MagicDNS, tailnet, tags — defined.",
+    href: "/concepts",
+    icon: "book",
+  },
+  {
+    title: "Architecture",
+    desc: "Control plane + data plane, PQC hybrid key exchange, DERP relays, multi-tenant model.",
+    href: "/architecture",
+    icon: "layers",
+  },
+  {
+    title: "Security",
+    desc: "Cryptographic commitments, threat model, auth model, audit trail, compliance.",
+    href: "/security",
+    icon: "shield",
+  },
+  {
+    title: "Features by plan",
+    desc: "Full feature matrix — what's on Free, Business, Workforce. Handler + feature key for each.",
+    href: "/features",
+    icon: "layers",
+  },
+  {
+    title: "Pricing",
+    desc: "Free forever for 100 devices. Business $10/mo · 60-day trial. Workforce on request.",
+    href: "/pricing",
+    icon: "hash",
+  },
+];
+
+const ICONS: Record<string, string> = {
+  zap: `<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>`,
+  code: `<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>`,
+  terminal: `<path d="m4 17 6-6-6-6M12 19h8"/>`,
+  book: `<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>`,
+  layers: `<path d="m12 2 10 6-10 6-10-6 10-6zM2 17l10 6 10-6M2 12l10 6 10-6"/>`,
+  shield: `<path d="M12 2 3 6v6c0 5 3.8 9.5 9 10 5.2-.5 9-5 9-10V6l-9-4z"/>`,
+  hash: `<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>`,
+};
+---
+<DocsLayout
+  title="QuickZTNA Documentation"
+  description="QuickZTNA docs — post-quantum Zero Trust mesh VPN. Quickstart, API reference, CLI, architecture, security, and more."
+  current="index"
+  next={{ href: "/quickstart", label: "Quickstart" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Documentation</div>
+  <h1>QuickZTNA Documentation</h1>
+  <p class="lead">
+    QuickZTNA is a post-quantum-encrypted Zero Trust mesh VPN. One agent per device,
+    one install command per fleet, identity-based ACLs, and ML-KEM-768 on every
+    tunnel. Start anywhere in the docs — quickstart for speed, API for depth.
+  </p>
+
+  <Callout type="pqc" title="Ship 100 devices in 2 minutes">
+    Issue one auth key → pipe the installer via MDM / Ansible / cloud-init →
+    your entire workforce joins the tailnet with hybrid X25519 + ML-KEM-768
+    tunnels. See the <a href="/quickstart">quickstart</a>.
+  </Callout>
+
+  <h2 id="explore">Explore</h2>
+  <div class="card-grid">
+    {cards.map((c) => (
+      <a href={c.href} class="card">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" set:html={ICONS[c.icon]}></svg>
+        </div>
+        <h3 class="card-title">{c.title}</h3>
+        <p class="card-desc" set:html={c.desc}></p>
+        <span class="card-arrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+    ))}
+  </div>
+
+  <h2 id="what">What QuickZTNA is</h2>
+  <p>
+    QuickZTNA consolidates your VPN, SSO gateway, and secrets manager into a single
+    agent. Every peer-to-peer tunnel is wrapped in hybrid <code>X25519 + ML-KEM-768</code>
+    key exchange (FIPS 203) — so stored traffic stays safe even if classical
+    elliptic curves fall to a quantum computer tomorrow. The same agent delivers
+    identity-based ACLs, device posture checks, JIT access, session recording,
+    and workforce analytics on paid plans.
+  </p>
+
+  <p>
+    The control plane speaks REST + WebSocket. The data plane is WireGuard
+    peer-to-peer with four global DERP relays (BLR, NYC, LON, SFO) when NAT
+    traversal fails. No hardware appliances. No public IPs. No firewall-change
+    tickets.
+  </p>
+
+  <h2 id="where-next">Where to start</h2>
+  <ul>
+    <li><strong>Building something?</strong> Go to <a href="/quickstart">Quickstart</a> — you'll have 100 devices connected before the kettle boils.</li>
+    <li><strong>Writing automation?</strong> Head to <a href="/api">API Reference</a> — 57 endpoints, action-based dispatch, full curl/Node/Python/Go/CLI/Terraform examples.</li>
+    <li><strong>Running it daily?</strong> The <a href="/cli">CLI reference</a> covers <code>ztna login</code>, <code>up</code>, <code>down</code>, <code>status</code>, <code>peers</code>, <code>ping</code>, <code>netcheck</code>, <code>diag</code>.</li>
+    <li><strong>Doing a security review?</strong> Start with <a href="/security">Security</a> — threat model, crypto commitments, audit trail, compliance policies.</li>
+    <li><strong>Evaluating plans?</strong> See <a href="/features">Features</a> and <a href="/pricing">Pricing</a> — honest feature matrix, real limits, no coming-soon shelf.</li>
+  </ul>
+</DocsLayout>

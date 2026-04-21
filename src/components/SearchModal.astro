@@ -1,0 +1,176 @@
+---
+// Static search modal — populated from SEARCH_INDEX at runtime
+const SEARCH_INDEX = [
+  { group: "Guides", title: "Quickstart — 100 devices in 2 minutes", breadcrumb: "Get started", href: "/quickstart" },
+  { group: "Guides", title: "Introduction to QuickZTNA", breadcrumb: "Get started", href: "/" },
+  { group: "Guides", title: "PQC handshake explained", breadcrumb: "Security", href: "/security#pqc" },
+  { group: "Guides", title: "Core concepts (ZTNA, ABAC, PQC)", breadcrumb: "Concepts", href: "/concepts" },
+  { group: "Guides", title: "Architecture overview", breadcrumb: "Concepts", href: "/architecture" },
+  { group: "API", title: "POST /api/auth/login", breadcrumb: "API / Auth", href: "/api#auth-login" },
+  { group: "API", title: "POST /api/register-machine", breadcrumb: "API / Machines", href: "/api#register-machine" },
+  { group: "API", title: "POST /api/key-management (create_auth_key)", breadcrumb: "API / Keys", href: "/api#create-auth-key" },
+  { group: "API", title: "POST /api/acl-evaluate", breadcrumb: "API / Policies", href: "/api#acl-evaluate" },
+  { group: "API", title: "POST /api/ai-assist (generate_acl)", breadcrumb: "API / AI", href: "/api#ai-generate-acl" },
+  { group: "API", title: "Authentication", breadcrumb: "API", href: "/api#authentication" },
+  { group: "API", title: "Errors", breadcrumb: "API", href: "/api#errors" },
+  { group: "API", title: "Rate limits", breadcrumb: "API", href: "/api#rate-limits" },
+  { group: "API", title: "WebSocket realtime", breadcrumb: "API", href: "/api#realtime" },
+  { group: "CLI", title: "ztna login", breadcrumb: "CLI / Auth", href: "/cli#login" },
+  { group: "CLI", title: "ztna logout", breadcrumb: "CLI / Auth", href: "/cli#logout" },
+  { group: "CLI", title: "ztna up (connect)", breadcrumb: "CLI / Lifecycle", href: "/cli#up" },
+  { group: "CLI", title: "ztna down (disconnect)", breadcrumb: "CLI / Lifecycle", href: "/cli#down" },
+  { group: "CLI", title: "ztna status", breadcrumb: "CLI / Status", href: "/cli#status-cmd" },
+  { group: "CLI", title: "ztna peers", breadcrumb: "CLI / Status", href: "/cli#peers" },
+  { group: "CLI", title: "ztna ip", breadcrumb: "CLI / Status", href: "/cli#ip" },
+  { group: "CLI", title: "ztna whois (reverse IP lookup)", breadcrumb: "CLI / Status", href: "/cli#whois" },
+  { group: "CLI", title: "ztna machines list", breadcrumb: "CLI / Inventory", href: "/cli#machines-list" },
+  { group: "CLI", title: "ztna auth-keys list", breadcrumb: "CLI / Inventory", href: "/cli#auth-keys-list" },
+  { group: "CLI", title: "ztna ping", breadcrumb: "CLI / Networking", href: "/cli#ping" },
+  { group: "CLI", title: "ztna nc (netcat through mesh)", breadcrumb: "CLI / Networking", href: "/cli#nc" },
+  { group: "CLI", title: "ztna ssh", breadcrumb: "CLI / Networking", href: "/cli#ssh" },
+  { group: "CLI", title: "ztna dns query", breadcrumb: "CLI / DNS", href: "/cli#dns-query" },
+  { group: "CLI", title: "ztna dns status", breadcrumb: "CLI / DNS", href: "/cli#dns-status" },
+  { group: "CLI", title: "ztna set (dynamic config)", breadcrumb: "CLI / Config", href: "/cli#set" },
+  { group: "CLI", title: "ztna route list", breadcrumb: "CLI / Routing", href: "/cli#route" },
+  { group: "CLI", title: "ztna route approve / reject (admin)", breadcrumb: "CLI / Routing", href: "/cli#route-admin" },
+  { group: "CLI", title: "ztna exit-node list / suggest", breadcrumb: "CLI / Routing", href: "/cli#exit-node" },
+  { group: "CLI", title: "ztna split-tunnel list", breadcrumb: "CLI / Routing", href: "/cli#split-tunnel" },
+  { group: "CLI", title: "ztna cert (TLS certificate)", breadcrumb: "CLI / Security", href: "/cli#cert" },
+  { group: "CLI", title: "ztna secrets list / get / set / rotate", breadcrumb: "CLI / Security", href: "/cli#secrets" },
+  { group: "CLI", title: "ztna acl list / test", breadcrumb: "CLI / Policy", href: "/cli#acl-list" },
+  { group: "CLI", title: "ztna posture status", breadcrumb: "CLI / Security", href: "/cli#posture-status" },
+  { group: "CLI", title: "ztna threat check", breadcrumb: "CLI / Security", href: "/cli#threat" },
+  { group: "CLI", title: "ztna audit list", breadcrumb: "CLI / Compliance", href: "/cli#audit" },
+  { group: "CLI", title: "ztna compliance report", breadcrumb: "CLI / Compliance", href: "/cli#compliance" },
+  { group: "CLI", title: "ztna netcheck (NAT diagnostics)", breadcrumb: "CLI / Diagnostics", href: "/cli#netcheck" },
+  { group: "CLI", title: "ztna debug (goroutines/derp/metrics)", breadcrumb: "CLI / Diagnostics", href: "/cli#debug" },
+  { group: "CLI", title: "ztna log (tail daemon log)", breadcrumb: "CLI / Diagnostics", href: "/cli#log" },
+  { group: "CLI", title: "ztna bugreport", breadcrumb: "CLI / Diagnostics", href: "/cli#bugreport" },
+  { group: "CLI", title: "ztna metrics print / write", breadcrumb: "CLI / Diagnostics", href: "/cli#metrics" },
+  { group: "CLI", title: "ztna version", breadcrumb: "CLI", href: "/cli#version" },
+  { group: "CLI", title: "ztna update", breadcrumb: "CLI", href: "/cli#update" },
+  { group: "CLI", title: "ztna switch (multi-org)", breadcrumb: "CLI / Profiles", href: "/cli#switch" },
+  { group: "CLI", title: "ztna profile list / create / delete", breadcrumb: "CLI / Profiles", href: "/cli#profile" },
+  { group: "CLI", title: "ztna install / uninstall (service)", breadcrumb: "CLI / System", href: "/cli#install" },
+  { group: "CLI", title: "ztna completion (shell)", breadcrumb: "CLI", href: "/cli#completion" },
+  { group: "CLI", title: "ztna wg-config export", breadcrumb: "CLI", href: "/cli#wg-config" },
+  { group: "Platform", title: "Features by plan", breadcrumb: "Platform", href: "/features" },
+  { group: "Platform", title: "Pricing", breadcrumb: "Platform", href: "/pricing" },
+  { group: "Platform", title: "Security policy", breadcrumb: "Platform", href: "/security" },
+  { group: "Platform", title: "Glossary", breadcrumb: "Resources", href: "/glossary" },
+];
+---
+<div class="modal-backdrop" id="search-modal" role="dialog" aria-modal="true" aria-label="Search docs">
+  <div class="search-modal">
+    <div class="search-input-row">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input
+        type="text"
+        class="search-input"
+        id="search-input"
+        placeholder="Search documentation, APIs, CLI…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <span class="kbd">ESC</span>
+    </div>
+    <div class="search-results" id="search-results"></div>
+    <div class="search-footer">
+      <span class="search-footer-item">↑↓ Navigate</span>
+      <span class="search-footer-item">↵ Open</span>
+      <span class="search-footer-item" style="margin-left:auto;">QuickZTNA docs</span>
+    </div>
+  </div>
+</div>
+
+<script is:inline define:vars={{ SEARCH_INDEX }}>
+  const modal = document.getElementById("search-modal");
+  const input = document.getElementById("search-input");
+  const results = document.getElementById("search-results");
+  const trigger = document.getElementById("search-trigger");
+
+  let selIdx = 0;
+  let currentResults = SEARCH_INDEX.slice(0, 8);
+
+  function render() {
+    if (!results) return;
+    if (currentResults.length === 0) {
+      results.innerHTML = '<div class="search-empty">No results</div>';
+      return;
+    }
+    const grouped = {};
+    currentResults.forEach((r) => {
+      (grouped[r.group] = grouped[r.group] || []).push(r);
+    });
+    let i = -1;
+    results.innerHTML = Object.entries(grouped)
+      .map(([g, items]) => {
+        return `<div class="search-group-title">${g}</div>` + items.map((r) => {
+          i += 1;
+          const isSel = i === selIdx;
+          return `<a class="search-result${isSel ? " sel" : ""}" href="${r.href}" data-idx="${i}">
+            <div class="search-result-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </div>
+            <div class="search-result-body">
+              <div class="search-result-title">${r.title}</div>
+              <div class="search-result-breadcrumb">${r.breadcrumb}</div>
+            </div>
+          </a>`;
+        }).join("");
+      })
+      .join("");
+  }
+
+  function update(q) {
+    const t = (q || "").toLowerCase().trim();
+    currentResults = t
+      ? SEARCH_INDEX.filter((r) => r.title.toLowerCase().includes(t) || r.breadcrumb.toLowerCase().includes(t))
+      : SEARCH_INDEX.slice(0, 8);
+    selIdx = 0;
+    render();
+  }
+
+  function open() {
+    modal?.classList.add("open");
+    setTimeout(() => input?.focus(), 40);
+    update("");
+  }
+  function close() {
+    modal?.classList.remove("open");
+    if (input) input.value = "";
+  }
+
+  trigger?.addEventListener("click", open);
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      if (modal?.classList.contains("open")) close();
+      else open();
+    }
+    if (!modal?.classList.contains("open")) return;
+    if (e.key === "Escape") close();
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      selIdx = Math.min(selIdx + 1, currentResults.length - 1);
+      render();
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      selIdx = Math.max(selIdx - 1, 0);
+      render();
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const r = currentResults[selIdx];
+      if (r) window.location.href = r.href;
+    }
+  });
+
+  modal?.addEventListener("click", (e) => {
+    if (e.target === modal) close();
+  });
+
+  input?.addEventListener("input", (e) => update(e.target.value));
+</script>

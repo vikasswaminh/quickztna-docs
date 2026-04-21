@@ -1,0 +1,225 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import Callout from "@/components/Callout.astro";
+
+// Feature matrix — Free / Business / Workforce
+// Derived from backend/migrations/041_plan_features.sql + requireFeature() calls
+
+type Cell = boolean | string;
+type Row = { feature: string; key?: string; handler?: string; free: Cell; business: Cell; workforce: Cell };
+type Section = { title: string; desc: string; rows: Row[] };
+
+const sections: Section[] = [
+  {
+    title: "Networking & Connectivity",
+    desc: "Core ZTNA primitives. Shipped on every plan, no gate, no trial.",
+    rows: [
+      { feature: "Post-Quantum WireGuard (ML-KEM-768)", handler: "key-exchange.ts", free: true, business: true, workforce: true },
+      { feature: "MagicDNS", handler: "dns-management.ts", free: true, business: true, workforce: true },
+      { feature: "DERP relays (4 regions)", handler: "derp-relay.ts", free: true, business: true, workforce: true },
+      { feature: "STUN NAT discovery", handler: "ztna/server/", free: true, business: true, workforce: true },
+      { feature: "ACL policies (ABAC)", handler: "acl-evaluate.ts", free: true, business: true, workforce: true },
+      { feature: "Subnet routing", handler: "machine-admin.ts", free: true, business: true, workforce: true },
+      { feature: "Exit nodes", handler: "machine-admin.ts", free: true, business: true, workforce: true },
+      { feature: "Device posture", handler: "posture-report.ts", free: true, business: true, workforce: true },
+      { feature: "Auto-quarantine", handler: "posture-report.ts", free: true, business: true, workforce: true },
+      { feature: "Tailnet IP allocation (atomic)", handler: "utils.ts", free: true, business: true, workforce: true },
+    ],
+  },
+  {
+    title: "AI & Assistant",
+    desc: "Claude-powered. Chat, ACL generation, event digests, incident response, auto-remediation.",
+    rows: [
+      { feature: "AI chat", key: "ai_chat", handler: "ai-assist.ts", free: true, business: true, workforce: true },
+      { feature: "Natural-language ACL builder", key: "nl_acl_builder", handler: "ai-assist.ts", free: true, business: true, workforce: true },
+      { feature: "Event summarizer", key: "event_summarizer", handler: "ai-assist.ts", free: true, business: true, workforce: true },
+      { feature: "Security digest (24h)", key: "security_digest", handler: "admin-insights.ts", free: true, business: true, workforce: true },
+      { feature: "Policy drift detection", key: "policy_drift", handler: "admin-insights.ts", free: true, business: true, workforce: true },
+      { feature: "Access heatmap", key: "access_heatmap", handler: "admin-insights.ts", free: true, business: true, workforce: true },
+      { feature: "AI actions (auto-remediation)", key: "ai_actions", handler: "ai-assist.ts", free: false, business: true, workforce: true },
+      { feature: "Incident response playbooks", key: "incident_response", handler: "ai-assist.ts", free: false, business: true, workforce: true },
+      { feature: "JIT access recommendations", key: "jit_recommendations", handler: "admin-insights.ts", free: false, business: true, workforce: true },
+    ],
+  },
+  {
+    title: "Security & Threat Detection",
+    desc: "Defense in depth — shipped in a single agent, not five separate tools.",
+    rows: [
+      { feature: "DNS filtering", key: "dns_filtering", handler: "dns-filter.ts", free: true, business: true, workforce: true },
+      { feature: "Cloud firewall (FaaS)", key: "faas_firewall", handler: "firewall-service.ts", free: true, business: true, workforce: true },
+      { feature: "Honeypot / deception", key: "deception", handler: "honeypot.ts", free: false, business: true, workforce: true },
+      { feature: "Anomaly detection (UEBA)", key: "anomaly_detection", handler: "anomaly-detection.ts", free: false, business: false, workforce: true },
+      { feature: "Data Loss Prevention (DLP)", key: "dlp", handler: "dlp.ts", free: false, business: false, workforce: true },
+      { feature: "CASB (shadow-IT)", key: "casb", handler: "casb.ts", free: false, business: false, workforce: true },
+      { feature: "User risk scoring", key: "user_risk_scoring", handler: "user-risk.ts", free: false, business: false, workforce: true },
+    ],
+  },
+  {
+    title: "Governance & Compliance",
+    desc: "Audit-ready by default. SOC 2 / ISO 27001 / HIPAA artifacts generated, not assembled.",
+    rows: [
+      { feature: "Compliance reports", key: "compliance_reports", handler: "admin-insights.ts", free: false, business: true, workforce: true },
+      { feature: "Continuous compliance", key: "continuous_compliance", handler: "governance.ts", free: false, business: true, workforce: true },
+      { feature: "Session recording", key: "session_recording", handler: "session-recording.ts", free: false, business: true, workforce: true },
+      { feature: "JIT access workflow", handler: "governance.ts", free: true, business: true, workforce: true },
+      { feature: "Access review campaigns", handler: "governance.ts", free: true, business: true, workforce: true },
+      { feature: "Policy version rollback", handler: "governance.ts", free: true, business: true, workforce: true },
+    ],
+  },
+  {
+    title: "Identity & Provisioning",
+    desc: "Bring your identity provider. SSO, SCIM, OAuth — all free. MFA-ready, device-bound.",
+    rows: [
+      { feature: "Email + password", handler: "auth.ts", free: true, business: true, workforce: true },
+      { feature: "GitHub / Google OAuth", handler: "github-auth.ts, google-auth.ts", free: true, business: true, workforce: true },
+      { feature: "SAML / OIDC SSO", handler: "sso-auth.ts", free: true, business: true, workforce: true },
+      { feature: "TOTP MFA + backup codes", handler: "auth.ts", free: true, business: true, workforce: true },
+      { feature: "SCIM 2.0 provisioning", key: "scim", handler: "scim.ts", free: false, business: true, workforce: true },
+      { feature: "Org groups (departments)", key: "org_groups", handler: "org-groups.ts", free: false, business: false, workforce: true },
+    ],
+  },
+  {
+    title: "Endpoint Management",
+    desc: "One agent — remote commands, secure shell, WebRTC desktop, OTA updates.",
+    rows: [
+      { feature: "Remote management (shell, commands)", key: "remote_management", handler: "agent-command.ts", free: false, business: true, workforce: true },
+      { feature: "Remote desktop (WebRTC)", key: "remote_desktop", handler: "remote-desktop.ts", free: false, business: false, workforce: true },
+      { feature: "Software inventory + patch", key: "software_inventory", handler: "inventory-report.ts", free: false, business: false, workforce: true },
+      { feature: "Device wipe / lock", handler: "machine-admin.ts", free: true, business: true, workforce: true },
+      { feature: "OTA agent updates", handler: "client-version.ts", free: true, business: true, workforce: true },
+    ],
+  },
+  {
+    title: "Data & Access Layer",
+    desc: "Protect internal apps, databases, Kubernetes, cloud VPCs — through the same tailnet.",
+    rows: [
+      { feature: "Secrets vault (AES-256-GCM)", key: "secrets_vault", handler: "secrets-vault.ts", free: false, business: true, workforce: true },
+      { feature: "Database access broker", key: "cloud_vpc", handler: "db-access.ts", free: false, business: false, workforce: true },
+      { feature: "Kubernetes access", key: "cloud_vpc", handler: "k8s-access.ts", free: false, business: false, workforce: true },
+      { feature: "Cloud firewall sync (AWS/Azure/GCP)", key: "cloud_vpc", handler: "cloud-firewall.ts", free: false, business: false, workforce: true },
+      { feature: "App connector (reverse proxy)", key: "app_gateway", handler: "app-connector.ts", free: false, business: false, workforce: true },
+      { feature: "Webhook forwarder", key: "app_gateway", handler: "forward-webhook.ts", free: false, business: false, workforce: true },
+      { feature: "Terraform provider", key: "app_gateway", handler: "terraform-api.ts", free: false, business: false, workforce: true },
+    ],
+  },
+  {
+    title: "Workforce & Productivity",
+    desc: "Built for distributed teams. Consent-first, GDPR-aware, compliance-ready.",
+    rows: [
+      { feature: "Session tracking", key: "workforce_analytics", handler: "workforce-analytics.ts", free: false, business: false, workforce: true },
+      { feature: "App / domain usage", key: "workforce_analytics", handler: "workforce-analytics.ts", free: false, business: false, workforce: true },
+      { feature: "Productivity scoring", key: "workforce_analytics", handler: "workforce-analytics.ts", free: false, business: false, workforce: true },
+      { feature: "Schedule compliance", key: "workforce_analytics", handler: "workforce-analytics.ts", free: false, business: false, workforce: true },
+      { feature: "Digital Experience Monitoring (DEM)", key: "dem", handler: "dem.ts", free: false, business: false, workforce: true },
+      { feature: "GDPR monitoring consent", key: "workforce_analytics", handler: "workforce-analytics.ts", free: false, business: false, workforce: true },
+    ],
+  },
+];
+
+function cell(v: Cell, color: string = "var(--success)") {
+  if (v === true) {
+    return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto"><path d="m5 12 5 5L20 7"/></svg>`;
+  }
+  if (v === false) {
+    return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block; margin:0 auto"><path d="M5 12h14"/></svg>`;
+  }
+  return `<span style="font-family:'Geist Mono',monospace; font-size:12px; font-weight:500;">${v}</span>`;
+}
+---
+<DocsLayout
+  title="Features · QuickZTNA Docs"
+  description="Complete feature matrix — what ships on Free, Business, and Workforce. Per-feature handler file + feature key. Honest about what's gated vs shelved."
+  current="index"
+  activeHref="/features"
+  prev={{ href: "/security", label: "Security" }}
+  next={{ href: "/pricing", label: "Pricing" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Reference</div>
+  <h1>Features by plan</h1>
+  <p class="lead">
+    Single source of truth for what ships, what plan gates it, and which backend
+    handler implements it. Derived directly from <code>backend/migrations/041_plan_features.sql</code>
+    and every <code>requireFeature()</code> call in the codebase.
+  </p>
+
+  <Callout type="warn" title="Honest limits">
+    Machine limits (100 on every plan) are enforced post-hoc by a background cron job, not at registration time. Hard registration-time gates are on the Q3 2026 roadmap. User limits are policy ceilings on Free (3 users) and unlimited on paid plans.
+  </Callout>
+
+  <h2 id="at-a-glance">At a glance</h2>
+  <div class="params-table" style="font-size:14px;">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Free</span></div>
+      <p class="param-desc">$0 forever · 100 machines · 3 users · community support. All networking, AI assistant, DNS filtering, JIT workflow, posture, SSO included.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Business</span></div>
+      <p class="param-desc">$10/mo · 100 machines · unlimited users · 60-day trial · priority support. Adds session recording, compliance reports, secrets vault, SCIM, honeypot, AI actions.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Workforce</span></div>
+      <p class="param-desc">Contact sales · 100 machines · unlimited users · dedicated support + SLA. Adds workforce analytics, DLP, CASB, anomaly detection, user risk, remote desktop, DEM, cloud-VPC integrations.</p>
+    </div>
+  </div>
+
+  <h2 id="matrix">Full feature matrix</h2>
+  <p>Every row shows the exact backend handler and (where applicable) the <code>requireFeature()</code> key.</p>
+
+  {sections.map((sec) => (
+    <section style="margin:36px 0 48px;">
+      <h3 style="margin-top:0;">{sec.title}</h3>
+      <p style="color:var(--text-muted); font-size:14px;">{sec.desc}</p>
+      <div style="overflow-x:auto; border:1px solid var(--border); border-radius:var(--r-md); margin-top:16px;">
+        <table style="width:100%; border-collapse:collapse; font-size:13.5px;">
+          <thead>
+            <tr style="background:var(--bg-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-muted);">
+              <th style="padding:10px 14px; text-align:left;">Feature</th>
+              <th style="padding:10px 14px; text-align:left;">Handler / key</th>
+              <th style="padding:10px 8px; text-align:center; width:80px;">Free</th>
+              <th style="padding:10px 8px; text-align:center; width:80px; color:var(--brand);">Business</th>
+              <th style="padding:10px 8px; text-align:center; width:90px;">Workforce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sec.rows.map((r) => (
+              <tr style="border-top:1px solid var(--border);">
+                <td style="padding:10px 14px; color:var(--text);">{r.feature}</td>
+                <td style="padding:10px 14px; font-family:'Geist Mono',monospace; font-size:12px; color:var(--text-muted);">
+                  {r.handler}{r.key && <><br /><span style="color:var(--brand); font-size:11px;">{r.key}</span></>}
+                </td>
+                <td style="padding:10px 8px; text-align:center;" set:html={cell(r.free, 'var(--success)')}></td>
+                <td style="padding:10px 8px; text-align:center;" set:html={cell(r.business, 'var(--brand)')}></td>
+                <td style="padding:10px 8px; text-align:center;" set:html={cell(r.workforce, 'var(--brand)')}></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  ))}
+
+  <h2 id="shelf">Listed but not actually gated</h2>
+  <Callout type="warn" title="Brutally honest: these are free on all plans today">
+    Three feature keys appear in the <code>plan_features</code> migration but have <strong>zero</strong> <code>requireFeature()</code> calls in any handler. They're effectively free for everyone. Investors and docs readers should know.
+  </Callout>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">risk_engine</span></div><p class="param-desc">Listed in plan_features, never gated at runtime.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">window_tracking</span></div><p class="param-desc">Marketed as Workforce-only, but no backend gate.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">dns_analytics</span></div><p class="param-desc">Advanced DNS reports free for everyone today.</p></div>
+  </div>
+
+  <h2 id="superadmin">Superadmin</h2>
+  <ul>
+    <li>Hardcoded email in <code>backend/src/middleware/superadmin.ts</code></li>
+    <li>Has cross-org read/write via <code>/api/platform-admin</code></li>
+    <li>Returned as <code>is_superadmin: true</code> in <code>/api/feature-check</code> response</li>
+    <li><strong>Does not bypass plan gates at backend</strong> — a superadmin on a Free org is still blocked from paid features at the handler level. Frontend uses the flag to show admin UI only.</li>
+  </ul>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/pricing">Pricing</a> — plan pricing, trial mechanics, billing caveats</li>
+    <li><a href="/api">API Reference</a> — every handler, every action</li>
+    <li><a href="/security">Security</a> — threat model + cryptographic commitments</li>
+  </ul>
+</DocsLayout>

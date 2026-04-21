@@ -1,0 +1,96 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+
+const terms = [
+  { t: "ABAC (Attribute-Based Access Control)", d: 'Authorization model where access is granted based on attributes of the user, device, resource, and environment (tags, posture, time, country) rather than fixed roles. Used in QuickZTNA ACLs.' },
+  { t: "ACL (Access Control List)", d: 'Rules that decide whether a connection between two peers is allowed. Evaluated by <code>acl-evaluate</code>.' },
+  { t: "Agent", d: 'The <code>ztna</code> binary running on each device. Handles WireGuard tunnel setup, posture reporting, heartbeat, and commands from the control plane.' },
+  { t: "Auth key", d: 'A reusable or one-time token (<code>tskey-auth-&lt;random&gt;</code>) that lets a new device register itself without going through interactive login. Used by MDMs and automation.' },
+  { t: "Broadcast", d: 'WebSocket message fan-out to all clients subscribed to a channel within an org. Rate-limited to 10/min/client.' },
+  { t: "CASB (Cloud Access Security Broker)", d: 'Discovers and controls unsanctioned SaaS app usage. Gated to Workforce plan.' },
+  { t: "Caddy", d: 'The reverse proxy + auto-TLS server that fronts everything on <code>login.quickztna.com</code>.' },
+  { t: "CIDR", d: 'A range of IP addresses, e.g. <code>100.64.0.0/10</code> (the tailnet address space).' },
+  { t: "Control plane", d: 'The authenticated API and dashboard that manages identities, policies, and device inventory. Separate from the data plane.' },
+  { t: "Cron", d: 'Periodic background jobs. Handles retention, trial expiry, anomaly scans, etc.' },
+  { t: "Data plane", d: 'The WireGuard peer-to-peer mesh that carries actual user traffic. Server never sees this traffic.' },
+  { t: "DEM (Digital Experience Monitoring)", d: 'Per-device network health (latency, packet loss, jitter) plus a health score. Gated to Workforce plan.' },
+  { t: "DERP (Designated Encrypted Relay for Packets)", d: 'WebSocket-based relay for peers that can\'t reach each other directly (symmetric NAT, CGNAT). 4 regions: BLR, NYC, LON, SFO.' },
+  { t: "DLP (Data Loss Prevention)", d: 'Scans agent-captured text for sensitive patterns (credit cards, SSNs, API keys). Reports events, can block. Gated to Workforce plan.' },
+  { t: "Envelope", d: 'The <code>{ success, data, error }</code> response shape used by every API endpoint.' },
+  { t: "Ephemeral key", d: 'An auth key that registers a single machine, after which the machine disappears from the tailnet when it goes offline. Used for CI/CD runners.' },
+  { t: "FIPS 203", d: 'NIST standard for ML-KEM (post-quantum key encapsulation). What QuickZTNA uses for quantum-safe tunnels.' },
+  { t: "Hono", d: 'Node.js web framework. Backend HTTP layer.' },
+  { t: "HKDF (HMAC-based Key Derivation Function)", d: 'Algorithm used to derive the hybrid PSK from combined X25519 + ML-KEM shared secrets.' },
+  { t: "JIT access (Just-In-Time)", d: 'Time-bounded, approved access grants for sensitive resources. Request → approve → auto-revoke when the window expires.' },
+  { t: "JWT (JSON Web Token)", d: 'Signed token proving identity. QuickZTNA uses ES256 (ECDSA P-256). Issuer <code>quickztna</code>, audience <code>quickztna-api</code>.' },
+  { t: "KEK / DEK", d: 'Key Encryption Key (master, in env) / Data Encryption Key (per-org, encrypted by KEK). Envelope encryption.' },
+  { t: "MagicDNS", d: 'Every machine reachable by name at <code>&lt;hostname&gt;.&lt;org&gt;.zt.net</code>. Resolved via the agent\'s built-in DNS stub.' },
+  { t: "ML-KEM-768", d: 'Module-Lattice-Based Key-Encapsulation Mechanism, 768-bit security. FIPS 203. The post-quantum half of the hybrid key exchange.' },
+  { t: "Node key", d: 'The permanent credential an agent uses after first registration. Different from the auth key (which is one-time/reusable for registration).' },
+  { t: "OAuth", d: 'Auth flow for GitHub and Google login. SSO is OIDC/SAML (separate).' },
+  { t: "Org / Tenant", d: 'A customer account. Every resource is scoped to an <code>org_id</code>. One user can belong to multiple orgs.' },
+  { t: "PBKDF2", d: 'Password hashing algorithm. QuickZTNA uses SHA-256 with 100K iterations.' },
+  { t: "PQC (Post-Quantum Cryptography)", d: 'Cryptographic primitives believed to resist quantum computers. QuickZTNA uses ML-KEM-768 for key exchange.' },
+  { t: "PSK (Pre-Shared Key)", d: 'Extra shared secret injected into WireGuard. QuickZTNA derives the PSK from the hybrid key exchange for quantum safety.' },
+  { t: "Posture", d: 'Device health signals: OS version, disk encryption, firewall on, antivirus running. Policies can require posture before granting access.' },
+  { t: "Razorpay", d: 'Current payment processor. India-first; international support via Razorpay International. Stripe on roadmap.' },
+  { t: "Refresh token", d: 'Long-lived (30d) token used to obtain new access tokens. Stored in <code>__Host-refresh_token</code> HttpOnly cookie.' },
+  { t: "SCIM (System for Cross-domain Identity Management)", d: 'Industry standard for automated user provisioning from identity providers (Okta, Azure AD). Gated to Business+.' },
+  { t: "Session recording", d: 'Captures admin sessions (remote shell, SSH jump) for audit playback. Gated to Business+.' },
+  { t: "Subnet route", d: 'A CIDR advertised by one machine so other peers can reach resources behind it (e.g., a home LAN or cloud VPC).' },
+  { t: "Superadmin", d: 'Platform operator (not an org role). Hardcoded email. Has <code>/api/platform-admin</code> access. Does not bypass plan gates.' },
+  { t: "Tailnet", d: 'The private encrypted mesh of all machines in one org. Addressed in <code>100.64.0.0/10</code> by default.' },
+  { t: "Tags", d: 'Arbitrary labels on machines (<code>tag:laptop</code>, <code>tag:prod</code>). ACLs frequently reference tags instead of hostnames.' },
+  { t: "TLS 1.3", d: 'Minimum TLS version for DERP. Enables the X25519Kyber768 hybrid KEM at the transport layer.' },
+  { t: "TOTP (Time-Based One-Time Password)", d: 'RFC 6238 6-digit code for MFA. QuickZTNA caches used codes for 90s to prevent replay.' },
+  { t: "Valkey", d: 'Open-source Redis fork. Used for session KV, rate limits, WebSocket pub/sub.' },
+  { t: "WireGuard", d: 'The modern VPN protocol that carries QuickZTNA tunnels. Kernel on Linux, userspace (wireguard-go) elsewhere.' },
+  { t: "Workforce plan", d: 'Highest paid tier. Unlocks workforce analytics, DLP, CASB, anomaly detection, remote desktop, DEM.' },
+  { t: "X25519", d: 'Elliptic curve Diffie-Hellman, the classical half of the hybrid key exchange. Combined with ML-KEM-768 for quantum safety.' },
+  { t: "ZTNA (Zero Trust Network Access)", d: 'Security model where every connection is verified against identity and policy regardless of network location. The "Z" in QuickZTNA.' },
+];
+
+// Group by starting letter
+const grouped: Record<string, typeof terms> = {};
+terms.forEach((term) => {
+  const letter = term.t[0].toUpperCase();
+  if (!grouped[letter]) grouped[letter] = [];
+  grouped[letter].push(term);
+});
+const letters = Object.keys(grouped).sort();
+---
+<DocsLayout
+  title="Glossary · QuickZTNA Docs"
+  description="Definitions for every QuickZTNA term — ZTNA, ABAC, PQC, DERP, WireGuard, MagicDNS, tailnet, posture, and 40+ more. Alphabetical."
+  current="index"
+  activeHref="/glossary"
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Reference</div>
+  <h1>Glossary</h1>
+  <p class="lead">
+    Definitions for every term used across QuickZTNA docs. Alphabetical.
+    One-line where possible; longer when nuance matters.
+  </p>
+
+  <div class="letter-nav" style="display:flex; flex-wrap:wrap; gap:6px; margin:24px 0 40px; padding:12px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--bg-subtle);">
+    {letters.map((l) => (
+      <a href={`#letter-${l}`} style="padding:4px 10px; border-radius:var(--r-sm); background:white; border:1px solid var(--border); font-family:'Geist Mono',monospace; font-size:12px; color:var(--text-secondary);">{l}</a>
+    ))}
+  </div>
+
+  {letters.map((letter) => (
+    <section style="margin-bottom:40px;">
+      <h2 id={`letter-${letter}`} style="font-family:'Geist Mono',monospace; font-size:48px; font-weight:600; color:var(--brand); letter-spacing:-0.03em; margin:48px 0 12px;">{letter}</h2>
+      <div class="params-table">
+        {grouped[letter].map((term) => (
+          <div class="param-row">
+            <div class="param-header">
+              <span class="param-name" style="font-size:14px;">{term.t}</span>
+            </div>
+            <p class="param-desc" set:html={term.d}></p>
+          </div>
+        ))}
+      </div>
+    </section>
+  ))}
+</DocsLayout>

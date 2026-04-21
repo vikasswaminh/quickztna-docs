@@ -1,0 +1,168 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import Callout from "@/components/Callout.astro";
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Guide · Configure SSO · QuickZTNA"
+  description="Configure SAML / OIDC SSO for Okta, Azure AD, Google Workspace, Auth0. SCIM provisioning. JIT group mapping. TOTP MFA."
+  current="index"
+  activeHref="/guide/sso"
+  prev={{ href: "/guide/posture", label: "Device posture" }}
+  next={{ href: "/api", label: "API Reference" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>User guide</div>
+  <h1>Configure SSO</h1>
+  <p class="lead">
+    Hook QuickZTNA to your identity provider so users sign in with their corporate
+    credentials. Supports OIDC (most providers), SAML 2.0 (enterprise), and
+    SCIM 2.0 for automated user provisioning. SSO is free on every plan — SCIM
+    is Business+.
+  </p>
+
+  <h2 id="providers">Supported providers</h2>
+  <p>Anything that speaks OIDC or SAML 2.0 works. Tested with:</p>
+  <ul>
+    <li>Okta — OIDC + SAML + SCIM</li>
+    <li>Microsoft Entra ID (Azure AD) — OIDC + SAML + SCIM</li>
+    <li>Google Workspace — OIDC + SCIM (SAML via Cloud Identity)</li>
+    <li>Auth0 — OIDC + SAML</li>
+    <li>JumpCloud, OneLogin, Ping Identity, Keycloak — OIDC + SAML</li>
+    <li>GitHub OAuth + Google OAuth — for developer-first teams (no SSO cost)</li>
+  </ul>
+
+  <h2 id="oidc-generic">Generic OIDC setup</h2>
+  <p>Most OIDC providers follow this pattern. Steps differ slightly per IdP.</p>
+  <ol>
+    <li>In your IdP, create an OIDC application (a.k.a. client).</li>
+    <li>Set redirect URI to <code>https://login.quickztna.com/api/sso-auth/callback_oidc</code>.</li>
+    <li>Note the client ID, client secret, issuer URL.</li>
+    <li>Enable scopes: <code>openid email profile groups</code>.</li>
+    <li>In QuickZTNA dashboard: <strong>Admin → SSO → Add OIDC provider</strong>. Paste client ID, secret, issuer.</li>
+    <li>Set org slug — e.g. <code>acme</code>. Users sign in via <code>acme.zt.net</code> or by clicking "SSO" on the login page.</li>
+    <li>Save. Test with a user account.</li>
+  </ol>
+  <CodeBlock samples={[s("API: configure OIDC", `$ curl <span class="tok-u">https://login.quickztna.com/api/db/sso_configurations</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "rows": [{
+        "org_id": "org_9fX2kR",
+        "provider": "oidc",
+        "issuer": "https://acme.okta.com",
+        "client_id": "0oabcdefghijk",
+        "client_secret": "secret-value",
+        "scopes": "openid email profile groups"
+      }]
+    }'</span>`)]} />
+
+  <h2 id="okta">Okta — OIDC step-by-step</h2>
+  <ol>
+    <li>Okta admin → <strong>Applications → Create App Integration</strong></li>
+    <li>Sign-in method: <strong>OIDC — OpenID Connect</strong>. Application type: <strong>Web Application</strong>.</li>
+    <li>Name: "QuickZTNA". Grant types: <strong>Authorization Code</strong>.</li>
+    <li>Sign-in redirect URI: <code>https://login.quickztna.com/api/sso-auth/callback_oidc</code></li>
+    <li>Sign-out redirect URI: <code>https://login.quickztna.com/auth</code></li>
+    <li>Assignments: groups that should have access.</li>
+    <li>Save. Copy Client ID + Client Secret.</li>
+    <li>Okta <strong>API → Authorization Servers → default → Claims</strong> → add <code>groups</code> claim of type <strong>Groups</strong> with filter matching your groups.</li>
+    <li>In QuickZTNA dashboard: Admin → SSO → Add OIDC. Issuer: <code>https://&lt;your-okta&gt;.okta.com</code>.</li>
+  </ol>
+
+  <h2 id="azure-ad">Microsoft Entra ID (Azure AD) — OIDC</h2>
+  <ol>
+    <li>Entra admin → <strong>App registrations → New registration</strong></li>
+    <li>Name: "QuickZTNA". Supported account types: single tenant.</li>
+    <li>Redirect URI (Web): <code>https://login.quickztna.com/api/sso-auth/callback_oidc</code></li>
+    <li><strong>Certificates &amp; secrets → New client secret</strong>. Copy the value immediately.</li>
+    <li><strong>API permissions → Microsoft Graph → email, profile, openid, User.Read, GroupMember.Read.All</strong>. Grant admin consent.</li>
+    <li><strong>Token configuration → Add groups claim → Security groups</strong>.</li>
+    <li>Note Application (client) ID + Directory (tenant) ID.</li>
+    <li>In QuickZTNA: Issuer <code>https://login.microsoftonline.com/&lt;tenant-id&gt;/v2.0</code>.</li>
+  </ol>
+
+  <h2 id="google">Google Workspace — OIDC</h2>
+  <ol>
+    <li>Google Cloud Console → <strong>APIs &amp; Services → Credentials → Create Credentials → OAuth client ID</strong>.</li>
+    <li>Application type: <strong>Web application</strong>.</li>
+    <li>Authorized redirect URI: <code>https://login.quickztna.com/api/sso-auth/callback_oidc</code></li>
+    <li>Enable <strong>Admin SDK API</strong> for group membership.</li>
+    <li>Grant domain-wide delegation for groups.</li>
+    <li>In QuickZTNA: Issuer <code>https://accounts.google.com</code>.</li>
+  </ol>
+
+  <h2 id="saml">SAML 2.0 setup</h2>
+  <p>For providers or orgs that mandate SAML over OIDC.</p>
+  <ol>
+    <li>In QuickZTNA dashboard: Admin → SSO → <strong>Add SAML provider</strong>. Note the Entity ID + ACS URL.</li>
+    <li>In your IdP: create a new SAML app using those values.</li>
+    <li>IdP → export metadata XML.</li>
+    <li>Upload the metadata XML in QuickZTNA, or paste the SSO URL + signing cert.</li>
+    <li>Map attributes:
+      <ul>
+        <li><code>NameID</code> → email</li>
+        <li><code>http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress</code> → email</li>
+        <li><code>groups</code> → groups (multi-value)</li>
+      </ul>
+    </li>
+    <li>Test SSO flow end-to-end.</li>
+  </ol>
+
+  <h2 id="scim">SCIM 2.0 provisioning (Business+)</h2>
+  <p>SCIM automates user lifecycle — new hires get tailnet access on day one; terminated users lose access immediately.</p>
+  <ol>
+    <li>QuickZTNA dashboard → Admin → SCIM → <strong>Generate bearer token</strong>. Copy immediately.</li>
+    <li>SCIM endpoint URL: <code>https://login.quickztna.com/api/scim</code></li>
+    <li>In your IdP's SCIM config:
+      <ul>
+        <li>Base URL: the URL above</li>
+        <li>Bearer token: the generated token</li>
+        <li>Supported operations: Create, Read, Update, Deactivate, Delete users; Create/Update/Delete groups</li>
+      </ul>
+    </li>
+    <li>Set attribute mappings. Minimum: <code>userName</code> (email), <code>name.givenName</code>, <code>name.familyName</code>, <code>emails[0].value</code>.</li>
+    <li>For groups: map your IdP groups to QuickZTNA groups. QuickZTNA uses group names in ACLs.</li>
+    <li>Enable provisioning. Test with a single user first.</li>
+  </ol>
+  <Callout type="warn" title="SCIM is one-way">
+    SCIM sync is IdP → QuickZTNA. Users created directly in QuickZTNA won't appear back in your IdP. For this reason, after enabling SCIM, disable direct signup: <strong>Admin → Security → Disable email signup</strong>.
+  </Callout>
+
+  <h2 id="groups">Group → role mapping</h2>
+  <p>Map IdP groups to QuickZTNA roles in <strong>Admin → SSO → Group mappings</strong>:</p>
+  <CodeBlock samples={[s("Example mappings", `{
+  <span class="tok-p">"acme-zt-owners"</span>:   <span class="tok-s">"owner"</span>,
+  <span class="tok-p">"acme-zt-admins"</span>:   <span class="tok-s">"admin"</span>,
+  <span class="tok-p">"acme-zt-members"</span>:  <span class="tok-s">"member"</span>,
+  <span class="tok-p">"acme-zt-readonly"</span>: <span class="tok-s">"member"</span>
+}`)]} />
+  <p>Groups not mapped default to <code>member</code>. Admins can override per user from the Members page.</p>
+
+  <h2 id="just-in-time">JIT user provisioning</h2>
+  <p>If a user authenticates via SSO but doesn't exist yet in QuickZTNA, the system creates them on the fly — using the email from the ID token. Group claims determine their initial role.</p>
+  <p>Disable this if you want strict pre-provisioning: <strong>Admin → Security → JIT user provisioning off</strong>.</p>
+
+  <h2 id="mfa">Adding TOTP MFA on top of SSO</h2>
+  <p>SSO already enforces your IdP's MFA. If you want an extra factor at the QuickZTNA layer:</p>
+  <ul>
+    <li>Admin enables <strong>require_mfa</strong> org-wide</li>
+    <li>Users enrol a TOTP authenticator (Google Authenticator, Authy, 1Password)</li>
+    <li>Every login prompts for a 6-digit code after SSO completes</li>
+    <li>Replay-protected (used codes cached 90s)</li>
+  </ul>
+
+  <h2 id="troubleshooting">Troubleshooting</h2>
+  <div class="params-table">
+    <div class="param-row"><div class="param-header"><span class="param-name">"Invalid state" after SSO redirect</span></div><p class="param-desc">CSRF state cookie expired. Start fresh; don't open SSO in a new tab.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">User created but no group</span></div><p class="param-desc">IdP not sending groups claim. Check scope includes <code>groups</code> (OIDC) or attribute mapping (SAML).</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">SCIM "401 Unauthorized"</span></div><p class="param-desc">Wrong bearer token, or token was rotated. Regenerate in dashboard and update in IdP.</p></div>
+    <div class="param-row"><div class="param-header"><span class="param-name">Signature validation failed (SAML)</span></div><p class="param-desc">Signing cert changed. Upload new IdP metadata XML or paste new cert.</p></div>
+  </div>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/security#authentication">Security: authentication model</a> — how JWTs + refresh tokens fit with SSO</li>
+    <li><a href="/api">API: SSO + SCIM endpoints</a></li>
+    <li><a href="/features#identity--provisioning">Features: identity &amp; provisioning</a> — what's free vs paid</li>
+  </ul>
+</DocsLayout>

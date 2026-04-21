@@ -1,0 +1,179 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import Callout from "@/components/Callout.astro";
+
+const AUTH_URL = "https://login.quickztna.com/auth";
+const SALES_URL = "mailto:sales@quickztna.com?subject=Workforce%20plan%20inquiry";
+
+const plans = [
+  {
+    name: "Free",
+    price: "$0",
+    per: "/mo forever",
+    tagline: "Homelabs, founders, small teams.",
+    highlight: false,
+    includes: ["100 machines", "3 users", "Community support"],
+    ctaLabel: "Start free",
+    ctaHref: AUTH_URL,
+  },
+  {
+    name: "Business",
+    price: "$10",
+    per: "/mo",
+    tagline: "Growing teams · 60-day free trial.",
+    highlight: true,
+    includes: ["100 machines", "Unlimited users", "Priority email support"],
+    ctaLabel: "Start 60-day trial",
+    ctaHref: AUTH_URL,
+  },
+  {
+    name: "Workforce",
+    price: "Contact",
+    per: "sales",
+    tagline: "Regulated orgs, distributed workforces.",
+    highlight: false,
+    includes: ["100 machines", "Unlimited users", "Dedicated support + SLA"],
+    ctaLabel: "Contact sales",
+    ctaHref: SALES_URL,
+  },
+];
+
+const faqs = [
+  {
+    q: "Is post-quantum crypto really on the Free plan?",
+    a: "Yes. Every WireGuard tunnel, on every plan, uses X25519 + ML-KEM-768 hybrid key exchange. It's not a paid feature — it's the default. The PSK is derived via HKDF-SHA256 from both classical and post-quantum shared secrets.",
+  },
+  {
+    q: "Why only Razorpay? What about Stripe / wire / invoice?",
+    a: "We launched in India first, so Razorpay is the self-serve default (supports 100+ countries via Razorpay International). For non-Razorpay regions or invoice/wire/cheque payment, contact sales@quickztna.com. Stripe is on the 2026-Q2 roadmap.",
+  },
+  {
+    q: "What happens when I hit the 100-machine limit on Free?",
+    a: "A background job (runs every 5 min) flags excess machines as over-quota — they stop heartbeating until you either delete old machines or upgrade. Nothing is deleted. Upgrade → features unlock immediately, quota cleared.",
+  },
+  {
+    q: "Can I downgrade? What happens to my data?",
+    a: "Yes, any time from the Billing page. Paid features gate down immediately. No data is deleted — if you downgrade then re-upgrade, everything resumes where it left off.",
+  },
+  {
+    q: "What does the 60-day Business trial include?",
+    a: "All Business-tier features. No credit card required. On day 61 the org auto-downgrades to Free via the expire-trials cron. You can extend via sales if you need more runway for a pilot.",
+  },
+  {
+    q: "Is there a self-hosted / on-prem option?",
+    a: "The architecture supports it (Docker Compose + PostgreSQL + Valkey + S3-compatible object storage), but we haven't productized it. Contact sales if you need air-gapped deployment — we do custom for regulated industries.",
+  },
+  {
+    q: "Are superadmins bypassing plan gates?",
+    a: "No. Platform superadmins have cross-org read/write for support, but plan gates are enforced at handler level. A superadmin helping a Free-tier org still hits FEATURE_GATED on paid endpoints. This is intentional.",
+  },
+  {
+    q: "What are the real enforced limits?",
+    a: "Feature gates are strict (every paid handler calls requireFeature). Machine limits are enforced post-hoc by a background cron job every 5 min, not at registration time — migrating to hard gates in Q3 2026. User limits are policy, not hard-gated in invite flow.",
+  },
+];
+---
+<DocsLayout
+  title="Pricing · QuickZTNA Docs"
+  description="Free forever for 100 devices. Business $10/mo with 60-day trial. Workforce on request. Honest pricing, real limits, no hidden gotchas."
+  current="index"
+  activeHref="/pricing"
+  prev={{ href: "/features", label: "Features" }}
+  next={{ href: "/glossary", label: "Glossary" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>Reference</div>
+  <h1>Pricing</h1>
+  <p class="lead">
+    Start on Free forever. Upgrade when you need advanced security or workforce
+    analytics. Post-quantum crypto is on every plan. Honest limits, fully
+    documented.
+  </p>
+
+  <h2 id="plans">Plans</h2>
+  <div class="card-grid" style="grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); margin:24px 0 40px;">
+    {plans.map((p) => (
+      <div class={`card${p.highlight ? " highlight" : ""}`} style={p.highlight ? "border-color:var(--brand); box-shadow:var(--shadow-glow); padding-top:28px;" : ""}>
+        {p.highlight && (
+          <div style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:var(--brand); color:white; font-size:10px; font-weight:600; padding:3px 10px; border-radius:10px; letter-spacing:0.04em; text-transform:uppercase;">Most popular</div>
+        )}
+        <h3 class="card-title" style="font-size:20px; margin-bottom:4px;">{p.name}</h3>
+        <p style="color:var(--text-muted); font-size:13px; margin:0 0 16px;">{p.tagline}</p>
+        <div style="display:flex; align-items:baseline; gap:4px; margin-bottom:14px;">
+          <span style="font-size:36px; font-weight:600; letter-spacing:-0.02em;">{p.price}</span>
+          <span style="color:var(--text-muted); font-size:13px;">{p.per}</span>
+        </div>
+        <ul style="list-style:none; padding:0; margin:0 0 18px; font-size:12.5px; color:var(--text-muted); font-family:'Geist Mono',monospace;">
+          {p.includes.map((i) => (
+            <li style="display:flex; align-items:center; gap:8px; margin:4px 0;">
+              <span style="width:4px; height:4px; border-radius:50%; background:var(--brand);"></span>
+              {i}
+            </li>
+          ))}
+        </ul>
+        <a href={p.ctaHref} class={`btn ${p.highlight ? "btn-brand" : "btn-secondary"}`} style="width:100%; text-align:center; justify-content:center;">{p.ctaLabel}</a>
+        <p style="text-align:center; color:var(--text-muted); font-size:10.5px; margin-top:10px;">No credit card required</p>
+      </div>
+    ))}
+  </div>
+
+  <h2 id="limits">Limits — enforced and policy</h2>
+  <div class="params-table">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Machines per org</span><span class="param-type">policy — soft enforce</span></div>
+      <p class="param-desc">100 on every plan. Enforced by <code>cron.ts → enforce-machine-limits</code> every 5 min — flags excess as <code>over_quota</code>, not registration-time gated.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Users per org</span><span class="param-type">policy — not hard-gated</span></div>
+      <p class="param-desc">3 on Free, unlimited on paid. Not enforced in invite flow today (Q3 2026 roadmap).</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Auth keys / API keys</span><span class="param-type">no limit</span></div>
+      <p class="param-desc">Each can be reusable/ephemeral with configurable expiry.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Subnet routes per machine</span><span class="param-type">no limit</span></div>
+      <p class="param-desc">Requires org setting <code>allow_subnet_routing</code> + admin approval of routes.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">ACL rules per org</span><span class="param-type">no limit</span></div>
+      <p class="param-desc">Evaluated per-connection by <code>acl-evaluate.ts</code>.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">Feature access</span><span class="param-type">strict</span></div>
+      <p class="param-desc">Per-plan via <code>requireFeature()</code>. 403 FEATURE_GATED at handler level.</p>
+    </div>
+  </div>
+
+  <h2 id="billing">Billing — current state</h2>
+  <Callout type="warn" title="Razorpay-only today">
+    Payment processor is Razorpay (India, supports 100+ countries internationally). Stripe columns exist in the schema but are not wired up. International customers needing invoice/wire/cheque should contact sales@quickztna.com. Stripe integration is 2026-Q2.
+  </Callout>
+
+  <h2 id="trial">Trial mechanics</h2>
+  <ul>
+    <li>Business plan offers a <strong>60-day free trial</strong>, no credit card required.</li>
+    <li>On day 61, the trial auto-downgrades to Free via the <code>expire-trials</code> cron job (runs every 5 min).</li>
+    <li>No hard cutoff — the background job marks the plan as <code>free</code> and features gate accordingly.</li>
+    <li>Need more runway for a pilot? Contact sales for an extension.</li>
+  </ul>
+
+  <h2 id="faq">FAQ</h2>
+  <div style="display:flex; flex-direction:column; gap:10px; margin:20px 0 40px;">
+    {faqs.map((f) => (
+      <details style="border:1px solid var(--border); border-radius:var(--r-md); background:white; box-shadow:var(--shadow-sm);">
+        <summary style="cursor:pointer; padding:14px 18px; font-weight:600; font-size:14px; list-style:none; display:flex; justify-content:space-between; align-items:center; gap:16px;">
+          <span>{f.q}</span>
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; color:var(--text-muted);"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/></svg>
+        </summary>
+        <div style="padding:0 18px 16px; color:var(--text-secondary); font-size:14px; line-height:1.6;">{f.a}</div>
+      </details>
+    ))}
+  </div>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/features">Feature matrix</a> — what each plan unlocks, row by row</li>
+    <li><a href="/quickstart">Quickstart</a> — start on Free in 2 minutes</li>
+    <li><a href="/api">API reference</a> — <code>/api/billing</code> and <code>/api/manage-subscription</code></li>
+  </ul>
+</DocsLayout>

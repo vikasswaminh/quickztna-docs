@@ -1,0 +1,44 @@
+---
+interface Sample {
+  lang: string;
+  code: string; // raw HTML (already escaped + tok-* spans)
+}
+
+interface Props {
+  samples: Sample[];
+  defaultLang?: string;
+  id?: string;
+}
+const { samples, defaultLang, id } = Astro.props;
+const initial = defaultLang || samples[0].lang;
+const blockId = id || "cb-" + Math.random().toString(36).slice(2, 8);
+---
+<div class="code-block" data-codeblock data-block-id={blockId}>
+  <div class="code-header">
+    <div class="lang-tabs">
+      {samples.map((s) => (
+        <button
+          class:list={["lang-tab", s.lang === initial && "active"]}
+          data-lang={s.lang}
+          type="button"
+        >
+          {s.lang}
+        </button>
+      ))}
+    </div>
+    <div class="code-actions">
+      <button class="code-icon-btn" data-copy-btn type="button" aria-label="Copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-copy-icon><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-check-icon style="display:none"><path d="m5 12 5 5L20 7"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="code-body">
+    {samples.map((s) => (
+      <pre
+        data-lang={s.lang}
+        style={s.lang === initial ? "" : "display:none"}
+      ><code set:html={s.code} /></pre>
+    ))}
+  </div>
+</div>

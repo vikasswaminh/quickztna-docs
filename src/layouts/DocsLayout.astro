@@ -1,0 +1,81 @@
+---
+import "@/styles/globals.css";
+import TopNav from "@/components/TopNav.astro";
+import Sidebar from "@/components/Sidebar.astro";
+import SearchModal from "@/components/SearchModal.astro";
+import FooterNav from "@/components/FooterNav.astro";
+import DocsScripts from "@/components/DocsScripts.astro";
+
+interface Props {
+  title?: string;
+  description?: string;
+  current?: string;
+  sidebarVariant?: "default" | "api";
+  threeCol?: boolean;
+  activeHref?: string;
+  prev?: { href: string; label: string };
+  next?: { href: string; label: string };
+}
+
+const {
+  title = "QuickZTNA Docs",
+  description = "QuickZTNA documentation — post-quantum Zero Trust Network Access. Quickstart, API reference, CLI, architecture, security.",
+  current,
+  sidebarVariant = "default",
+  threeCol = false,
+  activeHref,
+  prev,
+  next,
+} = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://docs.quickztna.com" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <TopNav current={current} />
+    <div class:list={["docs-layout", threeCol && "three-col"]}>
+      <Sidebar variant={sidebarVariant} activeHref={activeHref} />
+      <main class:list={["main", threeCol && "three-col"]}>
+        {threeCol ? (
+          <>
+            <div class="content three-col-content">
+              <slot />
+              <div class="feedback-row">
+                <span>Was this page helpful?</span>
+                <button class="feedback-btn" data-feedback-btn type="button">👍 Yes</button>
+                <button class="feedback-btn" data-feedback-btn type="button">👎 No</button>
+                <span data-feedback-msg style="display:none; color:var(--text-muted); font-size:13px;">Thanks for the feedback!</span>
+              </div>
+              <FooterNav prev={prev} next={next} />
+            </div>
+            <slot name="right-rail" />
+          </>
+        ) : (
+          <div class="content">
+            <slot />
+            <div class="feedback-row">
+              <span>Was this page helpful?</span>
+              <button class="feedback-btn" data-feedback-btn type="button">👍 Yes</button>
+              <button class="feedback-btn" data-feedback-btn type="button">👎 No</button>
+              <span data-feedback-msg style="display:none; color:var(--text-muted); font-size:13px;">Thanks for the feedback!</span>
+            </div>
+            <FooterNav prev={prev} next={next} />
+          </div>
+        )}
+      </main>
+    </div>
+    <SearchModal />
+    <DocsScripts />
+  </body>
+</html>

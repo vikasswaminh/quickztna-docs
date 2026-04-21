@@ -1,0 +1,178 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import Callout from "@/components/Callout.astro";
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Guide · Issuing auth keys · QuickZTNA"
+  description="How to issue, scope, rotate, and revoke auth keys. Reusable vs ephemeral, expiry, tags, MDM rollout patterns."
+  current="index"
+  activeHref="/guide/auth-keys"
+  prev={{ href: "/quickstart", label: "Quickstart" }}
+  next={{ href: "/guide/install", label: "Install the agent" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>User guide</div>
+  <h1>Issuing auth keys</h1>
+  <p class="lead">
+    Auth keys (<code>tskey-auth-&lt;random&gt;</code>) are the credential the
+    <code>ztna</code> agent uses to enrol new devices into your tailnet. This
+    guide covers the decisions you need to make before issuing one — reusable
+    vs ephemeral, expiry, tags — plus rotation and revocation patterns.
+  </p>
+
+  <h2 id="when">When to issue an auth key</h2>
+  <p>You need an auth key when enrolling a device via the <code>ztna</code> installer with no browser. Typical cases:</p>
+  <ul>
+    <li>MDM rollout (Intune, Jamf, Airwatch) pushing the installer to 100+ laptops</li>
+    <li>Ansible / Terraform / cloud-init provisioning servers</li>
+    <li>CI/CD runners (GitHub Actions, GitLab CI) needing ephemeral tailnet access</li>
+    <li>Docker containers with <code>ZTNA_AUTH_KEY</code> as a secret</li>
+  </ul>
+  <p>If a user is interactively setting up one device, they don't need an auth key — they can just run <code>ztna login</code> and authenticate through the browser.</p>
+
+  <h2 id="decide">Key design decisions</h2>
+
+  <h3>Reusable vs one-shot</h3>
+  <div class="params-table">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">reusable: true</span></div>
+      <p class="param-desc">One key enrols many devices. Best for fleet rollouts. Set a short expiry (1 hour) and revoke after the rollout.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">reusable: false (default)</span></div>
+      <p class="param-desc">Key burns on first use. Best for one device, one human. Natural "don't share this" property.</p>
+    </div>
+  </div>
+
+  <h3>Ephemeral vs persistent</h3>
+  <div class="params-table">
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">ephemeral: true</span></div>
+      <p class="param-desc">Enrolled machines auto-deregister when they go offline. Use for CI runners, containers, scale-to-zero workloads. No manual cleanup.</p>
+    </div>
+    <div class="param-row">
+      <div class="param-header"><span class="param-name">ephemeral: false (default)</span></div>
+      <p class="param-desc">Machines persist across reboots and offline periods. Use for laptops, servers, anything that should stay in inventory.</p>
+    </div>
+  </div>
+
+  <h3>Expiry</h3>
+  <p>How long the key is valid for enrolling new devices (not how long enrolled devices stay authenticated). Range: 5 minutes — 30 days.</p>
+  <ul>
+    <li><strong>1 hour</strong> — right default for fleet rollouts</li>
+    <li><strong>24 hours</strong> — convenient for async MDM rollouts</li>
+    <li><strong>7-30 days</strong> — for CI runner pool that constantly churns</li>
+  </ul>
+
+  <h3>Tags</h3>
+  <p>Tags applied to each enrolled device. Used in ACL rules — e.g. a rule "tag:laptop can SSH to tag:prod" applies to any machine with <code>tag:laptop</code>.</p>
+  <p>Prefix with <code>tag:</code>. Multiple tags via comma-separated list. Tags can be added later via <code>ztna set --tags</code>, but setting them at enrolment time means they're correct from first heartbeat.</p>
+
+  <h2 id="issue">Issuing the key</h2>
+
+  <h3>Via dashboard</h3>
+  <ol>
+    <li>Go to <strong>Settings → API Keys → Auth Keys</strong></li>
+    <li>Click <strong>Create auth key</strong></li>
+    <li>Fill in: reusable, ephemeral, expiry, tags, description</li>
+    <li>Copy the returned key (<code>tskey-auth-...</code>) — you cannot retrieve it again</li>
+  </ol>
+
+  <h3>Via CLI (admin only)</h3>
+  <CodeBlock samples={[s("Command", `$ ztna auth-key create \\
+    --reusable \\
+    --expiry 1h \\
+    --tags tag:laptop,tag:eng \\
+    --description "Q2 laptop fleet rollout"
+
+<span class="tok-c">✓ Auth key created: tskey-auth-abc123def456
+  Reusable:     yes
+  Ephemeral:    no
+  Expires:      in 1 hour
+  Tags:         tag:laptop, tag:eng
+  Description:  Q2 laptop fleet rollout
+
+COPY THIS KEY NOW — you cannot retrieve it later.</span>`)]} />
+
+  <h3>Via API</h3>
+  <CodeBlock samples={[s("curl", `$ curl <span class="tok-u">https://login.quickztna.com/api/key-management</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -H <span class="tok-s">"Content-Type: application/json"</span> \\
+    -d <span class="tok-s">'{
+      "action": "create_auth_key",
+      "org_id": "org_9fX2kR",
+      "reusable": true,
+      "expires_in": 3600,
+      "tags": ["tag:laptop", "tag:eng"],
+      "description": "Q2 laptop fleet rollout"
+    }'</span>`), s("Terraform", `<span class="tok-k">resource</span> <span class="tok-s">"quickztna_auth_key"</span> <span class="tok-s">"q2_rollout"</span> {
+  org_id      = <span class="tok-s">"org_9fX2kR"</span>
+  reusable    = <span class="tok-k">true</span>
+  expires_in  = <span class="tok-n">3600</span>
+  tags        = [<span class="tok-s">"tag:laptop"</span>, <span class="tok-s">"tag:eng"</span>]
+  description = <span class="tok-s">"Q2 laptop fleet rollout"</span>
+}
+
+<span class="tok-k">output</span> <span class="tok-s">"key"</span> {
+  value     = quickztna_auth_key.q2_rollout.key
+  sensitive = <span class="tok-k">true</span>
+}`)]} />
+
+  <h2 id="rollout">Rolling the key out</h2>
+  <p>Set <code>ZTNA_AUTH_KEY</code> in the environment and run the installer. The agent auto-registers + connects.</p>
+  <CodeBlock samples={[
+    s("Ansible", `- name: Enrol device in QuickZTNA
+  shell: curl -fsSL https://login.quickztna.com/install.sh | ZTNA_AUTH_KEY={{ ztna_key }} sh
+  environment:
+    ZTNA_AUTH_KEY: "{{ ztna_key }}"
+  vars:
+    ztna_key: "{{ lookup('env', 'ZTNA_KEY') }}"`),
+    s("Cloud-init", `#cloud-config
+runcmd:
+  - curl -fsSL https://login.quickztna.com/install.sh | ZTNA_AUTH_KEY=tskey-auth-xxx sh`),
+    s("GitHub Actions", `- name: Install QuickZTNA
+  run: curl -fsSL https://login.quickztna.com/install.sh | sh
+  env:
+    ZTNA_AUTH_KEY: \${{ secrets.ZTNA_EPHEMERAL_KEY }}`),
+    s("Docker", `FROM ubuntu:24.04
+ARG ZTNA_AUTH_KEY
+RUN curl -fsSL https://login.quickztna.com/install.sh | ZTNA_AUTH_KEY=$ZTNA_AUTH_KEY sh
+ENTRYPOINT ["ztna", "up", "--userspace"]`),
+  ]} />
+
+  <h2 id="rotation">Rotation</h2>
+  <p>Auth keys don't rotate themselves — because they're only used at enrolment. After enrolment, each machine uses a permanent <code>node_key</code> that's separately revocable.</p>
+  <p>Recommended hygiene:</p>
+  <ul>
+    <li><strong>Revoke after use.</strong> Once your fleet rollout completes, revoke the key from Settings → API Keys → Auth Keys, or <code>ztna auth-keys revoke tskey-auth-abc...</code></li>
+    <li><strong>Short expiry.</strong> 1-hour expiry is fine for most rollouts. Set the expiry even if you plan to revoke — it's defence in depth.</li>
+    <li><strong>Don't commit keys.</strong> Treat auth keys like passwords. Use your secret manager.</li>
+  </ul>
+
+  <h2 id="revoke">Revoking</h2>
+  <p>Revoke an auth key to prevent future enrolments. Machines already enrolled with the key are unaffected (they have <code>node_key</code>s of their own).</p>
+  <CodeBlock samples={[s("CLI", `$ ztna auth-keys list
+<span class="tok-c">PREFIX             REUSABLE  USES  EXPIRES
+tskey-auth-abc12…  yes       87    in 45 min</span>
+
+$ ztna auth-keys revoke tskey-auth-abc123
+<span class="tok-c">✓ Revoked — future enrolments with this key will fail</span>`), s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/key-management</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "revoke_auth_key",
+      "org_id": "org_9fX2kR",
+      "key_id": "ak_9fX2kR"
+    }'</span>`)]} />
+
+  <Callout type="info" title="Revoking a key does not disconnect devices">
+    A revoked auth key only blocks future enrolments. Already-enrolled machines keep running. To disconnect a specific machine, use <code>ztna machine-admin</code> with <code>action: "quarantine"</code> or <code>"delete"</code>.
+  </Callout>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/guide/install">Installing the agent</a> — how the installer uses this key</li>
+    <li><a href="/guide/approve-devices">Approving + managing devices</a> — what comes after enrolment</li>
+    <li><a href="/api#create-auth-key">API: create_auth_key</a> — full request/response reference</li>
+  </ul>
+</DocsLayout>

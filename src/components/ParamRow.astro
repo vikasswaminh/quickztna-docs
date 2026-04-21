@@ -1,0 +1,31 @@
+---
+interface Props {
+  name: string;
+  type: string;
+  required?: boolean;
+  desc: string; // raw HTML allowed
+  hasChildren?: boolean;
+}
+const { name, type, required = false, desc, hasChildren = false } = Astro.props;
+---
+<div class:list={["param-row", hasChildren && "has-children"]} data-param-row>
+  <div class="param-header">
+    <span class="param-name">{name}</span>
+    <span class="param-type">{type}</span>
+    <span class:list={["param-badge", required ? "req" : "opt"]}>
+      {required ? "required" : "optional"}
+    </span>
+  </div>
+  <p class="param-desc" set:html={desc}></p>
+  {hasChildren && (
+    <>
+      <span class="param-expand" data-expand-btn>
+        <span class="chev">›</span>
+        <span data-expand-text>Show child attributes</span>
+      </span>
+      <div class="param-children">
+        <slot />
+      </div>
+    </>
+  )}
+</div>

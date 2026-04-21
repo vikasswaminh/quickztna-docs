@@ -1,0 +1,158 @@
+---
+import DocsLayout from "@/layouts/DocsLayout.astro";
+import CodeBlock from "@/components/CodeBlock.astro";
+import Callout from "@/components/Callout.astro";
+const s = (lang: string, code: string) => ({ lang, code });
+---
+<DocsLayout
+  title="Guide · Approving + managing devices · QuickZTNA"
+  description="Approve, rename, quarantine, wipe, and delete machines from dashboard, CLI, or API. Admin approval gate. Auto-quarantine for posture failure."
+  current="index"
+  activeHref="/guide/approve-devices"
+  prev={{ href: "/guide/install", label: "Install the agent" }}
+  next={{ href: "/guide/acl-policies", label: "Write ACL policies" }}
+>
+  <div class="eyebrow"><span class="eyebrow-dot"></span>User guide</div>
+  <h1>Approving + managing devices</h1>
+  <p class="lead">
+    After enrolment, machines appear in your dashboard's Machines view. This
+    guide covers the admin actions: approve, rename, tag, quarantine, wipe,
+    delete — all via dashboard, CLI, or REST API.
+  </p>
+
+  <h2 id="approval-gate">The approval gate</h2>
+  <p>Orgs can enable <strong>approval required</strong> under <strong>Settings → Admin → Security</strong>. When enabled:</p>
+  <ul>
+    <li>Newly enrolled machines go into <code>pending</code> status</li>
+    <li>They receive a tailnet IP but ACL evaluation denies all connections</li>
+    <li>An admin must explicitly <strong>approve</strong> before the machine becomes <code>online</code></li>
+    <li>An email + WebSocket notification fires on every new pending machine</li>
+  </ul>
+  <p>Approval gate is <strong>off by default</strong>. Turn it on for high-sensitivity environments.</p>
+
+  <h2 id="approve">Approve</h2>
+  <CodeBlock samples={[
+    s("Dashboard", `Machines → filter by status: pending
+  → select machine
+  → click "Approve"
+  → (optional) set tags, hostname
+  → confirm`),
+    s("CLI", `$ ztna machine-admin approve --name pending-laptop
+<span class="tok-c">✓ Approved m_Pq7r2w (pending-laptop)
+  Tailnet IP:  100.64.1.42
+  Status:      online</span>`),
+    s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "approve",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w"
+    }'</span>`),
+  ]} />
+
+  <h2 id="rename">Rename</h2>
+  <Callout type="warn" title="Field name gotcha">
+    The rename action uses <code>name</code>, not <code>new_name</code>.
+  </Callout>
+  <CodeBlock samples={[s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "rename",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w",
+      "name": "laptop-alex-new"
+    }'</span>`)]} />
+  <p>The machine's MagicDNS name changes immediately to <code>laptop-alex-new.&lt;org&gt;.zt.net</code>. Old name stops resolving after the next heartbeat (within 60 seconds).</p>
+
+  <h2 id="tags">Update tags</h2>
+  <p>Tags are labels used in ACL rules. Change them at any time without restarting the tunnel.</p>
+  <CodeBlock samples={[s("CLI (from the device)", `$ ztna set --tags tag:laptop,tag:eng,tag:prod
+<span class="tok-c">✓ Tags updated: tag:laptop, tag:eng, tag:prod
+✓ Control plane notified</span>`), s("API (admin, any device)", `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "update_tags",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w",
+      "tags": ["tag:laptop", "tag:eng"]
+    }'</span>`)]} />
+
+  <h2 id="quarantine">Quarantine</h2>
+  <p>Quarantine isolates a device without deleting it. Tailnet IP stays allocated; ACL evaluation denies all traffic. Used for:</p>
+  <ul>
+    <li>Posture failure (auto-applied)</li>
+    <li>Suspicious activity pending investigation</li>
+    <li>Offboarding — user has left, device unreturned</li>
+  </ul>
+  <CodeBlock samples={[s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "quarantine",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w",
+      "reason": "Posture failure: disk encryption disabled"
+    }'</span>`)]} />
+  <p>To un-quarantine: re-run <code>approve</code>. Audit log shows who quarantined, when, why, and who approved recovery.</p>
+
+  <h2 id="wipe">Remote wipe</h2>
+  <Callout type="warn" title="Destructive action">
+    Remote wipe removes the agent, config, state, and tokens from the device. The machine must re-enrol with a fresh auth key afterwards. Does <strong>NOT</strong> wipe user data — only the QuickZTNA agent.
+  </Callout>
+  <p>Delivered via the next heartbeat. If the device is offline, the command queues — it executes when the device comes back online.</p>
+  <CodeBlock samples={[s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "wipe_device",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w",
+      "confirm": "WIPE-m_Pq7r2w"
+    }'</span>`)]} />
+  <p>The <code>confirm</code> field is a dead-man's switch — it must match the literal string <code>WIPE-&lt;machine_id&gt;</code>. Prevents accidental bulk wipes.</p>
+
+  <h2 id="lock">Lock device (reversible)</h2>
+  <p>Temporarily disable a device without wiping it. Tunnel drops; machine cannot reconnect until unlocked.</p>
+  <CodeBlock samples={[s("API", `$ curl <span class="tok-u">https://login.quickztna.com/api/machine-admin</span> \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "action": "lock_device",
+      "org_id": "org_9fX2kR",
+      "machine_id": "m_Pq7r2w"
+    }'</span>`)]} />
+
+  <h2 id="delete">Delete</h2>
+  <p>Permanent. Removes the machine from inventory, releases its tailnet IP, invalidates its <code>node_key</code>. Audit log retained per policy.</p>
+  <CodeBlock samples={[s("CLI", `$ ztna machine-admin delete --name old-server
+<span class="tok-c">✓ Machine old-server (100.64.1.88) deleted
+  Tailnet IP released · node_key invalidated · audit log retained 90d</span>`)]} />
+
+  <h2 id="bulk">Bulk operations</h2>
+  <p>For fleet-level actions (wipe all offline &gt;30d, quarantine all non-compliant, delete ephemeral runners), use the REST API with a script. CRUD endpoints accept filter criteria:</p>
+  <CodeBlock samples={[s("Quarantine all non-compliant", `$ curl <span class="tok-u">https://login.quickztna.com/api/db/machines?action=update</span> \\
+    -X PATCH \\
+    -H <span class="tok-s">"Authorization: Bearer $QZ_API_KEY"</span> \\
+    -d <span class="tok-s">'{
+      "status": "quarantined",
+      "_filters": [
+        { "column": "org_id", "op": "=", "value": "org_9fX2kR" },
+        { "column": "posture_verdict", "op": "=", "value": "non_compliant" }
+      ]
+    }'</span>`)]} />
+
+  <h2 id="audit">Audit trail</h2>
+  <p>Every action (approve, quarantine, rename, wipe, delete) writes to <code>audit_logs</code> with:</p>
+  <ul>
+    <li>Actor: user ID, email, IP</li>
+    <li>Action + target machine ID</li>
+    <li>Reason (if provided)</li>
+    <li>Before/after state for diffs</li>
+    <li>Timestamp (UTC)</li>
+  </ul>
+  <p>Query via <code>ztna audit list --days 7</code> or export via <code>/api/export</code> (not <code>/api/export-data</code>).</p>
+
+  <h2 id="see-also">See also</h2>
+  <ul>
+    <li><a href="/guide/posture">Posture policies</a> — the auto-quarantine trigger</li>
+    <li><a href="/guide/acl-policies">ACL policies</a> — tags you set here are referenced there</li>
+    <li><a href="/api#machine-approve">API: machine-admin</a> — full reference</li>
+  </ul>
+</DocsLayout>
