@@ -19,10 +19,10 @@ const plans = [
   {
     name: "Business",
     price: "$10",
-    per: "/mo",
+    per: "per user /mo",
     tagline: "Growing teams · 60-day free trial.",
     highlight: true,
-    includes: ["100 machines", "Unlimited users", "Priority email support"],
+    includes: ["Unlimited machines", "Billed per active user", "Priority email support"],
     ctaLabel: "Start 60-day trial",
     ctaHref: AUTH_URL,
   },
@@ -32,7 +32,7 @@ const plans = [
     per: "sales",
     tagline: "Regulated orgs, distributed workforces.",
     highlight: false,
-    includes: ["100 machines", "Unlimited users", "Dedicated support + SLA"],
+    includes: ["Unlimited machines", "Custom per-user pricing", "Dedicated support + SLA"],
     ctaLabel: "Contact sales",
     ctaHref: SALES_URL,
   },
@@ -75,7 +75,7 @@ const faqs = [
 ---
 <DocsLayout
   title="Pricing · QuickZTNA Docs"
-  description="Free forever for 100 devices. Business $10/mo with 60-day trial. Workforce on request. Honest pricing, real limits, no hidden gotchas."
+  description="Free forever for 100 devices and 3 users. Business $10 per user / month — unlimited machines, 60-day trial. Workforce on request. Honest pricing, real limits, no hidden gotchas."
   current="index"
   activeHref="/pricing"
   prev={{ href: "/features", label: "Features" }}
@@ -120,11 +120,11 @@ const faqs = [
   <div class="params-table">
     <div class="param-row">
       <div class="param-header"><span class="param-name">Machines per org</span><span class="param-type">policy — soft enforce</span></div>
-      <p class="param-desc">100 on every plan. Enforced by <code>cron.ts → enforce-machine-limits</code> every 5 min — flags excess as <code>over_quota</code>, not registration-time gated.</p>
+      <p class="param-desc">100 on Free. Unlimited on Business and Workforce. Enforced by <code>cron.ts → enforce-machine-limits</code> every 5 min for Free — flags excess as <code>over_quota</code>, not registration-time gated.</p>
     </div>
     <div class="param-row">
       <div class="param-header"><span class="param-name">Users per org</span><span class="param-type">policy — not hard-gated</span></div>
-      <p class="param-desc">3 on Free, unlimited on paid. Not enforced in invite flow today (Q3 2026 roadmap).</p>
+      <p class="param-desc">3 on Free. Billed per active user on Business ($10/user/mo) and Workforce (custom). Not hard-gated in invite flow today (Q3 2026 roadmap).</p>
     </div>
     <div class="param-row">
       <div class="param-header"><span class="param-name">Auth keys / API keys</span><span class="param-type">no limit</span></div>
